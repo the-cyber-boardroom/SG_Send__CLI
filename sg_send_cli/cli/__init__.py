@@ -17,6 +17,24 @@ def cmd_clone(args):
     print(f'Cloned vault to {directory}/')
 
 
+def cmd_pull(args):
+    sync   = create_sync(args.base_url, args.token)
+    result = sync.pull(args.directory)
+    added  = len(result['added'])
+    modified = len(result['modified'])
+    deleted  = len(result['deleted'])
+    if added + modified + deleted == 0:
+        print('Already up to date.')
+    else:
+        for f in result['added']:
+            print(f'  + {f}')
+        for f in result['modified']:
+            print(f'  ~ {f}')
+        for f in result['deleted']:
+            print(f'  - {f}')
+        print(f'Pulled: {added} added, {modified} modified, {deleted} deleted')
+
+
 def cmd_push(args):
     sync   = create_sync(args.base_url, args.token)
     result = sync.push(args.directory)
@@ -74,6 +92,10 @@ def main():
     clone_parser.add_argument('vault_key',  help='Vault key ({passphrase}:{vault_id})')
     clone_parser.add_argument('directory',  nargs='?', default=None, help='Target directory (default: vault_id)')
     clone_parser.set_defaults(func=cmd_clone)
+
+    pull_parser = subparsers.add_parser('pull', help='Pull remote changes to local directory')
+    pull_parser.add_argument('directory', nargs='?', default='.', help='Vault directory (default: .)')
+    pull_parser.set_defaults(func=cmd_pull)
 
     push_parser = subparsers.add_parser('push', help='Push local changes to the remote vault')
     push_parser.add_argument('directory', nargs='?', default='.', help='Vault directory (default: .)')
