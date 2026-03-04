@@ -141,3 +141,129 @@ class Test_Vault__Crypto:
         decrypted    = self.crypto.decrypt(file_key, encrypted)
         assert decrypted == plaintext
         assert self.crypto.hash_data(decrypted) == self.crypto.hash_data(plaintext)
+
+
+class Test_Vault__Crypto__Vault_Key_Derivation:
+    """Cross-language test vectors from the deterministic vault pointer spec.
+    These vectors MUST match the JavaScript SGVaultCrypto implementation."""
+
+    def setup_method(self):
+        self.crypto = Vault__Crypto()
+
+    # --- parse_vault_key ---
+
+    def test_parse_vault_key__simple(self):
+        passphrase, vault_id = self.crypto.parse_vault_key('my-secret-passphrase:a1b2c3d4')
+        assert passphrase == 'my-secret-passphrase'
+        assert vault_id   == 'a1b2c3d4'
+
+    def test_parse_vault_key__passphrase_with_colons(self):
+        passphrase, vault_id = self.crypto.parse_vault_key('pass:with:colons:deadbeef')
+        assert passphrase == 'pass:with:colons'
+        assert vault_id   == 'deadbeef'
+
+    def test_parse_vault_key__invalid_no_colon(self):
+        with pytest.raises(ValueError):
+            self.crypto.parse_vault_key('nocolonhere')
+
+    def test_parse_vault_key__invalid_empty_passphrase(self):
+        with pytest.raises(ValueError):
+            self.crypto.parse_vault_key(':a1b2c3d4')
+
+    def test_parse_vault_key__invalid_empty_vault_id(self):
+        with pytest.raises(ValueError):
+            self.crypto.parse_vault_key('passphrase:')
+
+    # --- Cross-language test vector 1 ---
+
+    def test_vector_1__read_key(self):
+        read_key = self.crypto.derive_read_key('my-secret-passphrase', 'a1b2c3d4')
+        assert read_key.hex() == 'a9cbcf15b4719384a732594405f138a2a42895fe56710dcfbd1324369f735124'
+
+    def test_vector_1__write_key(self):
+        write_key = self.crypto.derive_write_key('my-secret-passphrase', 'a1b2c3d4')
+        assert write_key.hex() == '3181d6650958b51fd00f913f6290eca22e6b09da661c8e831fc89fe659df378e'
+
+    def test_vector_1__tree_file_id(self):
+        read_key     = bytes.fromhex('a9cbcf15b4719384a732594405f138a2a42895fe56710dcfbd1324369f735124')
+        tree_file_id = self.crypto.derive_tree_file_id(read_key, 'a1b2c3d4')
+        assert tree_file_id == '4bc7e18f0779'
+
+    def test_vector_1__settings_file_id(self):
+        read_key         = bytes.fromhex('a9cbcf15b4719384a732594405f138a2a42895fe56710dcfbd1324369f735124')
+        settings_file_id = self.crypto.derive_settings_file_id(read_key, 'a1b2c3d4')
+        assert settings_file_id == '591414eaaa88'
+
+    def test_vector_1__derive_keys_all_at_once(self):
+        keys = self.crypto.derive_keys('my-secret-passphrase', 'a1b2c3d4')
+        assert keys['read_key']         == 'a9cbcf15b4719384a732594405f138a2a42895fe56710dcfbd1324369f735124'
+        assert keys['write_key']        == '3181d6650958b51fd00f913f6290eca22e6b09da661c8e831fc89fe659df378e'
+        assert keys['tree_file_id']     == '4bc7e18f0779'
+        assert keys['settings_file_id'] == '591414eaaa88'
+        assert keys['passphrase']       == 'my-secret-passphrase'
+        assert keys['vault_id']         == 'a1b2c3d4'
+
+    def test_vector_1__derive_keys_from_vault_key(self):
+        keys = self.crypto.derive_keys_from_vault_key('my-secret-passphrase:a1b2c3d4')
+        assert keys['read_key']         == 'a9cbcf15b4719384a732594405f138a2a42895fe56710dcfbd1324369f735124'
+        assert keys['write_key']        == '3181d6650958b51fd00f913f6290eca22e6b09da661c8e831fc89fe659df378e'
+        assert keys['tree_file_id']     == '4bc7e18f0779'
+        assert keys['settings_file_id'] == '591414eaaa88'
+
+    # --- Cross-language test vector 2 ---
+
+    def test_vector_2__read_key(self):
+        read_key = self.crypto.derive_read_key('pass:with:colons', 'deadbeef')
+        assert read_key.hex() == 'a903fc429b2806e6c05ba0d21271d982f451bd3c78e4899a8ee6e0fbed3d9b3f'
+
+    def test_vector_2__write_key(self):
+        write_key = self.crypto.derive_write_key('pass:with:colons', 'deadbeef')
+        assert write_key.hex() == '3da59de516555d963eaf4c5d3179893acd9045bb0df69f3c89c0bed915a77f96'
+
+    def test_vector_2__tree_file_id(self):
+        read_key     = bytes.fromhex('a903fc429b2806e6c05ba0d21271d982f451bd3c78e4899a8ee6e0fbed3d9b3f')
+        tree_file_id = self.crypto.derive_tree_file_id(read_key, 'deadbeef')
+        assert tree_file_id == '220ae644906a'
+
+    def test_vector_2__settings_file_id(self):
+        read_key         = bytes.fromhex('a903fc429b2806e6c05ba0d21271d982f451bd3c78e4899a8ee6e0fbed3d9b3f')
+        settings_file_id = self.crypto.derive_settings_file_id(read_key, 'deadbeef')
+        assert settings_file_id == '5398a4d71d8d'
+
+    def test_vector_2__derive_keys_from_vault_key(self):
+        keys = self.crypto.derive_keys_from_vault_key('pass:with:colons:deadbeef')
+        assert keys['read_key']         == 'a903fc429b2806e6c05ba0d21271d982f451bd3c78e4899a8ee6e0fbed3d9b3f'
+        assert keys['write_key']        == '3da59de516555d963eaf4c5d3179893acd9045bb0df69f3c89c0bed915a77f96'
+        assert keys['tree_file_id']     == '220ae644906a'
+        assert keys['settings_file_id'] == '5398a4d71d8d'
+
+    # --- Key independence ---
+
+    def test_read_key_and_write_key_are_independent(self):
+        read_key  = self.crypto.derive_read_key('test-pass', 'abcd1234')
+        write_key = self.crypto.derive_write_key('test-pass', 'abcd1234')
+        assert read_key != write_key
+
+    def test_different_vault_id_different_keys(self):
+        keys1 = self.crypto.derive_keys('same-pass', 'aaaaaaaa')
+        keys2 = self.crypto.derive_keys('same-pass', 'bbbbbbbb')
+        assert keys1['read_key']     != keys2['read_key']
+        assert keys1['write_key']    != keys2['write_key']
+        assert keys1['tree_file_id'] != keys2['tree_file_id']
+
+    def test_different_passphrase_different_keys(self):
+        keys1 = self.crypto.derive_keys('pass-one', 'abcd1234')
+        keys2 = self.crypto.derive_keys('pass-two', 'abcd1234')
+        assert keys1['read_key']     != keys2['read_key']
+        assert keys1['write_key']    != keys2['write_key']
+        assert keys1['tree_file_id'] != keys2['tree_file_id']
+
+    # --- Encrypt/decrypt round trip with derived keys ---
+
+    def test_encrypt_decrypt_with_derived_read_key(self):
+        keys      = self.crypto.derive_keys('my-secret-passphrase', 'a1b2c3d4')
+        read_key  = keys['read_key_bytes']
+        plaintext = b'{"vault_name": "Test Vault", "version": 1}'
+        encrypted = self.crypto.encrypt(read_key, plaintext)
+        decrypted = self.crypto.decrypt(read_key, encrypted)
+        assert decrypted == plaintext

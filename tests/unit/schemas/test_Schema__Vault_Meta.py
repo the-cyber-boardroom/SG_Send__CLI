@@ -11,14 +11,14 @@ class Test_Schema__Vault_Meta:
 
     def test_create_with_values(self):
         meta = Schema__Vault_Meta(vault_id='abcd1234', name='My Vault',
-                                  vault_key='pass:abcd1234:abc123def456')
+                                  vault_key='pass:abcd1234')
         assert meta.vault_id  == 'abcd1234'
         assert meta.name      == 'My Vault'
-        assert meta.vault_key == 'pass:abcd1234:abc123def456'
+        assert meta.vault_key == 'pass:abcd1234'
 
     def test_round_trip(self):
         meta = Schema__Vault_Meta(vault_id='abcd1234', name='Test Vault',
-                                  vault_key='secret:abcd1234:abc123def456')
+                                  vault_key='secret:abcd1234')
         restored = Schema__Vault_Meta.from_json(meta.json())
         assert restored.json() == meta.json()
 
