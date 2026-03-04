@@ -51,6 +51,53 @@ class Vault__Sync(Type_Safe):
 
         return directory
 
+    def pull(self, directory: str = '.') -> dict:
+        vault_key = self._read_head(directory)
+        keys      = self.crypto.derive_keys_from_vault_key(vault_key)
+        vault_id  = keys['vault_id']
+        read_key  = keys['read_key_bytes']
+
+        settings      = self._download_and_decrypt(vault_id, keys['settings_file_id'], read_key)
+        tree          = self._download_and_decrypt(vault_id, keys['tree_file_id'], read_key)
+        settings_data = json.loads(settings)
+        tree_data     = json.loads(tree)
+
+        old_tree_data = self._read_local_tree(directory)
+        old_file_map  = self._flatten_tree(old_tree_data.get('tree', {}))
+        new_file_map  = self._flatten_tree(tree_data.get('tree', {}))
+
+        old_paths = set(old_file_map.keys())
+        new_paths = set(new_file_map.keys())
+
+        added    = new_paths - old_paths
+        deleted  = old_paths - new_paths
+        modified = set()
+        for path in old_paths & new_paths:
+            if old_file_map[path].get('file_id') != new_file_map[path].get('file_id'):
+                modified.add(path)
+
+        for path in added | modified:
+            file_id        = new_file_map[path]['file_id']
+            encrypted_data = self.api.read(vault_id, file_id)
+            plaintext      = self.crypto.decrypt(read_key, encrypted_data)
+            full_path      = os.path.join(directory, path)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, 'wb') as f:
+                f.write(plaintext)
+
+        for path in deleted:
+            full_path = os.path.join(directory, path)
+            if os.path.exists(full_path):
+                os.remove(full_path)
+
+        sg_vault_dir = os.path.join(directory, SG_VAULT_DIR)
+        with open(os.path.join(sg_vault_dir, TREE_FILE), 'w') as f:
+            json.dump(tree_data, f, indent=2)
+        with open(os.path.join(sg_vault_dir, SETTINGS_FILE), 'w') as f:
+            json.dump(settings_data, f, indent=2)
+
+        return dict(added=sorted(added), modified=sorted(modified), deleted=sorted(deleted))
+
     def push(self, directory: str = '.') -> dict:
         vault_key = self._read_head(directory)
         keys      = self.crypto.derive_keys_from_vault_key(vault_key)
