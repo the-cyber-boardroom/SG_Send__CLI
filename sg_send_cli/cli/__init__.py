@@ -1,8 +1,34 @@
 import argparse
+import os
 import sys
 from sg_send_cli.crypto.Vault__Crypto import Vault__Crypto
 from sg_send_cli.api.Vault__API       import Vault__API
 from sg_send_cli.sync.Vault__Sync     import Vault__Sync
+
+TOKEN_FILE = 'token'
+
+
+def _resolve_token(token: str, directory: str) -> str:
+    if token:
+        _save_token(token, directory)
+        return token
+    return _load_token(directory)
+
+
+def _save_token(token: str, directory: str):
+    sg_vault_dir = os.path.join(directory, '.sg_vault')
+    if os.path.isdir(sg_vault_dir):
+        token_path = os.path.join(sg_vault_dir, TOKEN_FILE)
+        with open(token_path, 'w') as f:
+            f.write(token)
+
+
+def _load_token(directory: str) -> str:
+    token_path = os.path.join(directory, '.sg_vault', TOKEN_FILE)
+    if os.path.isfile(token_path):
+        with open(token_path, 'r') as f:
+            return f.read().strip()
+    return ''
 
 
 def create_sync(base_url: str = None, access_token: str = None) -> Vault__Sync:
@@ -14,11 +40,14 @@ def create_sync(base_url: str = None, access_token: str = None) -> Vault__Sync:
 def cmd_clone(args):
     sync      = create_sync(args.base_url, args.token)
     directory = sync.clone(args.vault_key, args.directory)
+    if args.token:
+        _save_token(args.token, directory)
     print(f'Cloned vault to {directory}/')
 
 
 def cmd_pull(args):
-    sync   = create_sync(args.base_url, args.token)
+    token  = _resolve_token(args.token, args.directory)
+    sync   = create_sync(args.base_url, token)
     result = sync.pull(args.directory)
     added  = len(result['added'])
     modified = len(result['modified'])
@@ -36,7 +65,8 @@ def cmd_pull(args):
 
 
 def cmd_push(args):
-    sync   = create_sync(args.base_url, args.token)
+    token  = _resolve_token(args.token, args.directory)
+    sync   = create_sync(args.base_url, token)
     result = sync.push(args.directory)
     added  = len(result['added'])
     modified = len(result['modified'])
@@ -71,7 +101,8 @@ def cmd_status(args):
 
 
 def cmd_remote_status(args):
-    sync   = create_sync(args.base_url, args.token)
+    token  = _resolve_token(args.token, args.directory)
+    sync   = create_sync(args.base_url, token)
     result = sync.remote_status(args.directory)
 
     remote_changes = result['remote_added'] or result['remote_modified'] or result['remote_deleted']
