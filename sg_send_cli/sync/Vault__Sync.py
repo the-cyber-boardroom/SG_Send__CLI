@@ -2,8 +2,9 @@ import json
 import os
 from   datetime                        import datetime, timezone
 from   osbot_utils.type_safe.Type_Safe import Type_Safe
-from   sg_send_cli.crypto.Vault__Crypto import Vault__Crypto
-from   sg_send_cli.api.Vault__API       import Vault__API
+from   sg_send_cli.crypto.Vault__Crypto       import Vault__Crypto
+from   sg_send_cli.api.Vault__API             import Vault__API
+from   sg_send_cli.sync.Vault__Legacy_Guard   import Vault__Legacy_Guard
 
 SG_VAULT_DIR  = '.sg_vault'
 HEAD_FILE     = 'HEAD'
@@ -12,8 +13,9 @@ SETTINGS_FILE = 'settings.json'
 
 
 class Vault__Sync(Type_Safe):
-    crypto : Vault__Crypto
-    api    : Vault__API
+    crypto       : Vault__Crypto
+    api          : Vault__API
+    legacy_guard : Vault__Legacy_Guard
 
     def clone(self, vault_key: str, directory: str = None) -> str:
         keys       = self.crypto.derive_keys_from_vault_key(vault_key)
@@ -52,6 +54,7 @@ class Vault__Sync(Type_Safe):
         return directory
 
     def pull(self, directory: str = '.') -> dict:
+        self.legacy_guard.check_vault_format(directory)
         vault_key = self._read_head(directory)
         keys      = self.crypto.derive_keys_from_vault_key(vault_key)
         vault_id  = keys['vault_id']
@@ -99,6 +102,7 @@ class Vault__Sync(Type_Safe):
         return dict(added=sorted(added), modified=sorted(modified), deleted=sorted(deleted))
 
     def push(self, directory: str = '.') -> dict:
+        self.legacy_guard.check_vault_format(directory)
         vault_key = self._read_head(directory)
         keys      = self.crypto.derive_keys_from_vault_key(vault_key)
         vault_id  = keys['vault_id']
@@ -156,6 +160,7 @@ class Vault__Sync(Type_Safe):
         return dict(added=list(added), modified=list(modified), deleted=list(deleted))
 
     def status(self, directory: str = '.') -> dict:
+        self.legacy_guard.check_vault_format(directory)
         old_tree_data = self._read_local_tree(directory)
         old_file_map  = self._flatten_tree(old_tree_data.get('tree', {}))
         new_file_map  = self._scan_local_directory(directory)
@@ -179,6 +184,7 @@ class Vault__Sync(Type_Safe):
                     clean=not added and not modified and not deleted)
 
     def remote_status(self, directory: str = '.') -> dict:
+        self.legacy_guard.check_vault_format(directory)
         vault_key = self._read_head(directory)
         keys      = self.crypto.derive_keys_from_vault_key(vault_key)
         vault_id  = keys['vault_id']
