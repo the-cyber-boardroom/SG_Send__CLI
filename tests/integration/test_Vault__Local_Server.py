@@ -175,7 +175,7 @@ class Test_Vault__Local_Server__Sync:
         with open(readme_path, 'rb') as f:
             assert f.read() == seeded['file_content']
 
-        assert os.path.isfile(os.path.join(clone_dir, '.sg_vault', 'HEAD'))
+        assert os.path.isfile(os.path.join(clone_dir, '.sg_vault', 'VAULT-KEY'))
         assert os.path.isfile(os.path.join(clone_dir, '.sg_vault', 'tree.json'))
         assert os.path.isfile(os.path.join(clone_dir, '.sg_vault', 'settings.json'))
 

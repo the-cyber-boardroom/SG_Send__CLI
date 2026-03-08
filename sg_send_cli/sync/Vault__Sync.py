@@ -12,7 +12,7 @@ from   sg_send_cli.schemas.Schema__Object_Tree       import Schema__Object_Tree
 from   sg_send_cli.schemas.Schema__Object_Ref        import Schema__Object_Ref
 
 SG_VAULT_DIR  = '.sg_vault'
-HEAD_FILE     = 'HEAD'
+VAULT_KEY_FILE = 'VAULT-KEY'
 TREE_FILE     = 'tree.json'
 SETTINGS_FILE = 'settings.json'
 
@@ -74,7 +74,7 @@ class Vault__Sync(Type_Safe):
 
         ref_manager.write_head(commit_id)
 
-        with open(os.path.join(sg_vault_dir, HEAD_FILE), 'w') as f:
+        with open(os.path.join(sg_vault_dir, VAULT_KEY_FILE), 'w') as f:
             f.write(vault_key)
         with open(os.path.join(sg_vault_dir, TREE_FILE), 'w') as f:
             json.dump(tree_data, f, indent=2)
@@ -85,7 +85,7 @@ class Vault__Sync(Type_Safe):
 
     def pull(self, directory: str = '.') -> dict:
         self.legacy_guard.check_vault_format(directory)
-        vault_key = self._read_head(directory)
+        vault_key = self._read_vault_key(directory)
         keys      = self.crypto.derive_keys_from_vault_key(vault_key)
         vault_id  = keys['vault_id']
         read_key  = keys['read_key_bytes']
@@ -163,7 +163,7 @@ class Vault__Sync(Type_Safe):
 
     def push(self, directory: str = '.') -> dict:
         self.legacy_guard.check_vault_format(directory)
-        vault_key = self._read_head(directory)
+        vault_key = self._read_vault_key(directory)
         keys      = self.crypto.derive_keys_from_vault_key(vault_key)
         vault_id  = keys['vault_id']
         read_key  = keys['read_key_bytes']
@@ -281,7 +281,7 @@ class Vault__Sync(Type_Safe):
 
     def remote_status(self, directory: str = '.') -> dict:
         self.legacy_guard.check_vault_format(directory)
-        vault_key = self._read_head(directory)
+        vault_key = self._read_vault_key(directory)
         keys      = self.crypto.derive_keys_from_vault_key(vault_key)
         vault_id  = keys['vault_id']
         read_key  = keys['read_key_bytes']
@@ -320,13 +320,13 @@ class Vault__Sync(Type_Safe):
         encrypted = self.api.read(vault_id, file_id)
         return self.crypto.decrypt(read_key, encrypted)
 
-    def _read_head(self, directory: str) -> str:
-        head_path = os.path.join(directory, SG_VAULT_DIR, HEAD_FILE)
-        with open(head_path, 'r') as f:
+    def _read_vault_key(self, directory: str) -> str:
+        vault_key_path = os.path.join(directory, SG_VAULT_DIR, VAULT_KEY_FILE)
+        with open(vault_key_path, 'r') as f:
             return f.read().strip()
 
     def _get_read_key(self, directory: str) -> bytes:
-        vault_key = self._read_head(directory)
+        vault_key = self._read_vault_key(directory)
         keys      = self.crypto.derive_keys_from_vault_key(vault_key)
         return keys['read_key_bytes']
 
