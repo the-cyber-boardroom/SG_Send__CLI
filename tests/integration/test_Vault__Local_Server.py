@@ -232,7 +232,6 @@ class Test_Vault__Local_Server__Sync:
             with open(full_path, 'rb') as f:
                 assert f.read() == content
 
-    @pytest.mark.xfail(reason='clone creates legacy format; push requires object-store format (refs/head)')
     def test_clone_then_push__uploads_new_file(self, vault_api, crypto, temp_dir):
         keys   = crypto.derive_keys(TEST_PASSPHRASE, 'push-test-vault')
         self._seed_vault(vault_api, crypto, keys)
@@ -248,7 +247,6 @@ class Test_Vault__Local_Server__Sync:
         result = sync.push(clone_dir)
         assert 'notes.txt' in result['added']
 
-    @pytest.mark.xfail(reason='clone creates legacy format; push/pull require object-store format (refs/head)')
     def test_clone_push_then_pull__round_trips(self, vault_api, crypto, temp_dir):
         keys   = crypto.derive_keys(TEST_PASSPHRASE, 'roundtrip-vault')
         self._seed_vault(vault_api, crypto, keys)
@@ -270,7 +268,6 @@ class Test_Vault__Local_Server__Sync:
         with open(data_path) as f:
             assert f.read() == 'round trip data'
 
-    @pytest.mark.xfail(reason='clone creates legacy format; status requires object-store format (refs/head)')
     def test_status_after_clone__is_clean(self, vault_api, crypto, temp_dir):
         keys = crypto.derive_keys(TEST_PASSPHRASE, 'status-test-vault')
         self._seed_vault(vault_api, crypto, keys)
