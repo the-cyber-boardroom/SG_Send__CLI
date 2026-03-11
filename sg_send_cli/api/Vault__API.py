@@ -1,14 +1,16 @@
 import json
-from   urllib.request                  import Request, urlopen
-from   urllib.error                    import HTTPError
-from   osbot_utils.type_safe.Type_Safe import Type_Safe
+from   urllib.request                                import Request, urlopen
+from   urllib.error                                  import HTTPError
+from   osbot_utils.type_safe.Type_Safe               import Type_Safe
+from   sg_send_cli.safe_types.Safe_Str__Base_URL     import Safe_Str__Base_URL
+from   sg_send_cli.safe_types.Safe_Str__Access_Token import Safe_Str__Access_Token
 
 DEFAULT_BASE_URL = 'https://send.sgraph.ai'
 
 
 class Vault__API(Type_Safe):
-    base_url     : str
-    access_token : str
+    base_url     : Safe_Str__Base_URL     = None
+    access_token : Safe_Str__Access_Token = None
 
     def setup(self):
         if not self.base_url:

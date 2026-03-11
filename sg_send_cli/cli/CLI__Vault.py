@@ -76,6 +76,9 @@ class CLI__Vault(Type_Safe):
             print(f'Pushed: {added} added, {modified} modified, {deleted} deleted')
 
     def cmd_status(self, args):
+        if getattr(args, 'remote', False):
+            self.cmd_remote_status(args)
+            return
         sync   = Vault__Sync(crypto=Vault__Crypto(), api=Vault__API())
         result = sync.status(args.directory)
         if result['clean']:
@@ -183,3 +186,6 @@ class CLI__Vault(Type_Safe):
             print(f'  Buckets:')
             for prefix, count in sorted(stats['buckets'].items()):
                 print(f'    {prefix}/ : {count} objects')
+
+    def cmd_log(self, args):
+        self.cmd_inspect_log(args)

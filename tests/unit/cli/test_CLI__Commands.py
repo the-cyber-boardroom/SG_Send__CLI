@@ -360,6 +360,72 @@ class Test_CLI__Vault_Cat_Object:
         assert exc_info.value.code == 1
 
 
+class Test_CLI__Vault_Log:
+
+    def setup_method(self):
+        self.tmp_dir   = tempfile.mkdtemp()
+        self.crypto    = Vault__Crypto()
+        self.api       = Vault__API__In_Memory()
+        self.api.setup()
+        self.sync      = Vault__Sync(crypto=self.crypto, api=self.api)
+        self.cli_vault = CLI__Vault()
+
+    def teardown_method(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_log_delegates_to_inspect_log(self, capsys):
+        vault_dir = os.path.join(self.tmp_dir, 'vault')
+        result    = self.sync.init(vault_dir)
+        vault_key = result['vault_key']
+
+        args = SimpleNamespace(directory=vault_dir, vault_key=vault_key, oneline=False, graph=False)
+        self.cli_vault.cmd_log(args)
+        output = capsys.readouterr().out
+        assert len(output) > 0
+
+    def test_log_oneline(self, capsys):
+        vault_dir = os.path.join(self.tmp_dir, 'vault')
+        result    = self.sync.init(vault_dir)
+        vault_key = result['vault_key']
+
+        args = SimpleNamespace(directory=vault_dir, vault_key=vault_key, oneline=True, graph=False)
+        self.cli_vault.cmd_log(args)
+        output = capsys.readouterr().out
+        assert len(output) > 0
+
+
+class Test_CLI__Vault_Status_Remote:
+
+    def setup_method(self):
+        self.tmp_dir   = tempfile.mkdtemp()
+        self.crypto    = Vault__Crypto()
+        self.api       = Vault__API__In_Memory()
+        self.api.setup()
+        self.sync      = Vault__Sync(crypto=self.crypto, api=self.api)
+        self.cli_vault = CLI__Vault()
+
+    def teardown_method(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_status_without_remote_shows_local(self, capsys):
+        vault_dir = os.path.join(self.tmp_dir, 'vault')
+        self.sync.init(vault_dir)
+        args = SimpleNamespace(directory=vault_dir, remote=False)
+        self.cli_vault.cmd_status(args)
+        output = capsys.readouterr().out
+        assert 'clean' in output.lower()
+
+    def test_status_with_remote_delegates(self, capsys):
+        vault_dir = os.path.join(self.tmp_dir, 'vault')
+        self.sync.init(vault_dir)
+        args = SimpleNamespace(directory=vault_dir, remote=True, token='tok', base_url=None)
+        with patch.object(self.cli_vault, 'create_sync', return_value=self.sync):
+            with patch.object(self.cli_vault.token_store, 'resolve_token', return_value='tok'):
+                self.cli_vault.cmd_status(args)
+        output = capsys.readouterr().out
+        assert 'version' in output.lower() or 'up to date' in output.lower()
+
+
 class Test_CLI__Main_Parser:
 
     def test_no_command_exits(self):
@@ -379,3 +445,17 @@ class Test_CLI__Main_Parser:
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 1
+
+    def test_log_command_registered(self):
+        cli_main = CLI__Main()
+        parser   = cli_main.build_parser()
+        args     = parser.parse_args(['log', '--oneline', '.'])
+        assert args.command == 'log'
+        assert args.oneline is True
+
+    def test_status_remote_flag_registered(self):
+        cli_main = CLI__Main()
+        parser   = cli_main.build_parser()
+        args     = parser.parse_args(['status', '--remote', '.'])
+        assert args.command == 'status'
+        assert args.remote  is True

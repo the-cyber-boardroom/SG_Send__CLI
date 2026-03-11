@@ -1,12 +1,13 @@
 import os
-from osbot_utils.type_safe.Type_Safe import Type_Safe
+from osbot_utils.type_safe.Type_Safe             import Type_Safe
+from sg_send_cli.safe_types.Safe_Str__Vault_Path import Safe_Str__Vault_Path
 
 REFS_DIR  = 'refs'
 HEAD_FILE = 'head'
 
 
 class Vault__Ref_Manager(Type_Safe):
-    vault_path : str
+    vault_path : Safe_Str__Vault_Path = None
 
     def read_head(self) -> str:
         path = self._head_path()

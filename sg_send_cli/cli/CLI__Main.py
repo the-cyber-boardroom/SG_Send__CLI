@@ -34,7 +34,8 @@ class CLI__Main(Type_Safe):
         push_parser.add_argument('directory', nargs='?', default='.', help='Vault directory (default: .)')
         push_parser.set_defaults(func=self.vault.cmd_push)
 
-        status_parser = subparsers.add_parser('status', help='Show local changes vs vault tree')
+        status_parser = subparsers.add_parser('status', help='Show local changes vs vault tree (use --remote for remote comparison)')
+        status_parser.add_argument('--remote', action='store_true', help='Compare against remote vault (requires --token)')
         status_parser.add_argument('directory', nargs='?', default='.', help='Vault directory (default: .)')
         status_parser.set_defaults(func=self.vault.cmd_status)
 
@@ -76,6 +77,13 @@ class CLI__Main(Type_Safe):
         inspect_stats_parser = subparsers.add_parser('inspect-stats', help='Show object store statistics (dev tool)')
         inspect_stats_parser.add_argument('directory', nargs='?', default='.', help='Vault directory (default: .)')
         inspect_stats_parser.set_defaults(func=self.vault.cmd_inspect_stats)
+
+        log_parser = subparsers.add_parser('log', help='Show commit history (alias for inspect-log)')
+        log_parser.add_argument('--vault-key', default=None, help='Vault key (auto-read from .sg_vault/VAULT-KEY if omitted)')
+        log_parser.add_argument('--oneline', action='store_true', help='Compact one-line-per-commit format')
+        log_parser.add_argument('--graph', action='store_true', help='Show graph with connectors')
+        log_parser.add_argument('directory', nargs='?', default='.', help='Vault directory (default: .)')
+        log_parser.set_defaults(func=self.vault.cmd_log)
 
         return parser
 

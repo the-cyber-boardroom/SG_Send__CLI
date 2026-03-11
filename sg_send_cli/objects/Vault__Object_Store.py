@@ -1,12 +1,13 @@
 import os
-from osbot_utils.type_safe.Type_Safe     import Type_Safe
-from sg_send_cli.crypto.Vault__Crypto    import Vault__Crypto
+from osbot_utils.type_safe.Type_Safe                 import Type_Safe
+from sg_send_cli.crypto.Vault__Crypto                import Vault__Crypto
+from sg_send_cli.safe_types.Safe_Str__Vault_Path     import Safe_Str__Vault_Path
 
 OBJECTS_DIR = 'objects'
 
 
 class Vault__Object_Store(Type_Safe):
-    vault_path : str
+    vault_path : Safe_Str__Vault_Path = None
     crypto     : Vault__Crypto
 
     def store(self, ciphertext: bytes) -> str:
