@@ -145,7 +145,8 @@ class Test_CLI__Vault_Clone:
         with patch.object(self.cli_vault, 'create_sync', return_value=self.sync):
             self.cli_vault.cmd_clone(args)
         output = capsys.readouterr().out
-        assert 'Cloned vault' in output
+        assert 'Clone complete' in output
+        assert 'Cloned to' in output
 
 
 class Test_CLI__Vault_Status:

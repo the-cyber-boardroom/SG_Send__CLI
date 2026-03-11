@@ -1,4 +1,5 @@
 import sys
+import time
 from osbot_utils.type_safe.Type_Safe     import Type_Safe
 from sg_send_cli.crypto.Vault__Crypto    import Vault__Crypto
 from sg_send_cli.api.Vault__API          import Vault__API
@@ -29,12 +30,74 @@ class CLI__Vault(Type_Safe):
         print()
         print('Save your vault key — you need it to clone this vault on another machine.')
 
+    def _format_size(self, size_bytes: int) -> str:
+        if size_bytes < 1024:
+            return f'{size_bytes} B'
+        elif size_bytes < 1024 * 1024:
+            return f'{size_bytes / 1024:.1f} KB'
+        elif size_bytes < 1024 * 1024 * 1024:
+            return f'{size_bytes / (1024 * 1024):.1f} MB'
+        else:
+            return f'{size_bytes / (1024 * 1024 * 1024):.1f} GB'
+
+    def _progress_bar(self, current: int, total: int, width: int = 30) -> str:
+        filled = int(width * current / total) if total > 0 else 0
+        bar    = '█' * filled + '░' * (width - filled)
+        pct    = int(100 * current / total) if total > 0 else 0
+        return f'[{bar}] {pct}%'
+
+    def _clone_progress(self, event: str, detail: str = None, info: dict = None):
+        info = info or {}
+        if event == 'metadata':
+            print(f'🔑 {detail}')
+        elif event == 'tree_resolved':
+            total = info.get('total_files', 0)
+            name  = info.get('vault_name', '???')
+            ver   = info.get('version', '?')
+            print(f'📦 Vault: {name} (version {ver})')
+            print(f'📂 Receiving {total} file{"s" if total != 1 else ""}...')
+            print()
+        elif event == 'file':
+            idx   = info.get('index', 0)
+            total = info.get('total', 0)
+            size  = info.get('size', 0)
+            bar   = self._progress_bar(idx, total)
+            line  = f'\r   {bar}  ({idx}/{total})  {self._format_size(size):>8}  {detail}'
+            if len(line) > 100:
+                line = line[:97] + '...'
+            sys.stdout.write(f'{line:<100}')
+            sys.stdout.flush()
+            if idx == total:
+                print()
+        elif event == 'done':
+            total_files = info.get('total_files', 0)
+            total_bytes = info.get('total_bytes', 0)
+            commit_id   = info.get('commit_id', '???')
+            version     = info.get('version', '?')
+            elapsed     = time.time() - self._clone_start_time
+            print()
+            print(f'✅ Clone complete!')
+            print()
+            print(f'   ┌─────────────────────────────────┐')
+            print(f'   │  📊 Summary                     │')
+            print(f'   ├─────────────────────────────────┤')
+            print(f'   │  Files:    {total_files:<22}│')
+            print(f'   │  Size:     {self._format_size(total_bytes):<22}│')
+            print(f'   │  Version:  {version:<22}│')
+            print(f'   │  Commit:   {commit_id:<22}│')
+            print(f'   │  Time:     {elapsed:.1f}s{"":<19}│')
+            print(f'   └─────────────────────────────────┘')
+
     def cmd_clone(self, args):
-        sync      = self.create_sync(args.base_url, args.token)
-        directory = sync.clone(args.vault_key, args.directory)
+        sync = self.create_sync(args.base_url, args.token)
+        print()
+        print(f'🔒 sg-send-cli clone')
+        print(f'   ─────────────────')
+        self._clone_start_time = time.time()
+        directory = sync.clone(args.vault_key, args.directory, on_progress=self._clone_progress)
         if args.token:
             self.token_store.save_token(args.token, directory)
-        print(f'Cloned vault to {directory}/')
+        print(f'   📁 Cloned to {directory}/')
 
     def cmd_pull(self, args):
         token  = self.token_store.resolve_token(args.token, args.directory)
