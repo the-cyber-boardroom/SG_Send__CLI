@@ -84,7 +84,7 @@ class Vault__Sync(Type_Safe):
 
         return dict(directory=directory, vault_key=vault_key, vault_id=vault_id)
 
-    def clone(self, vault_key: str, directory: str = None) -> str:
+    def clone(self, vault_key: str, directory: str = None, on_progress: callable = None) -> str:
         keys       = self.crypto.derive_keys_from_vault_key(vault_key)
         vault_id   = keys['vault_id']
         read_key   = keys['read_key_bytes']
@@ -92,6 +92,9 @@ class Vault__Sync(Type_Safe):
         if directory is None:
             directory = vault_id
         os.makedirs(directory, exist_ok=True)
+
+        if on_progress:
+            on_progress('metadata', 'Downloading vault metadata...')
 
         settings = self._download_and_decrypt(vault_id, keys['settings_file_id'], read_key)
         tree     = self._download_and_decrypt(vault_id, keys['tree_file_id'], read_key)
@@ -101,14 +104,20 @@ class Vault__Sync(Type_Safe):
 
         file_map = self._flatten_tree(tree_data.get('tree', {}))
 
+        if on_progress:
+            on_progress('tree_resolved', None, dict(total_files=len(file_map), vault_id=vault_id,
+                                                     vault_name=settings_data.get('vault_name', vault_id),
+                                                     version=tree_data.get('version', 1)))
+
         sg_vault_dir = os.path.join(directory, SG_VAULT_DIR)
         os.makedirs(sg_vault_dir, exist_ok=True)
         object_store = Vault__Object_Store(vault_path=sg_vault_dir, crypto=self.crypto)
         ref_manager  = Vault__Ref_Manager(vault_path=sg_vault_dir)
 
-        tree_obj = Schema__Object_Tree()
+        tree_obj     = Schema__Object_Tree()
+        total_bytes  = 0
 
-        for file_path, file_info in file_map.items():
+        for idx, (file_path, file_info) in enumerate(file_map.items()):
             file_id        = file_info['file_id']
             encrypted_data = self.api.read(vault_id, file_id)
             plaintext      = self.crypto.decrypt(read_key, encrypted_data)
@@ -119,6 +128,11 @@ class Vault__Sync(Type_Safe):
 
             blob_id = object_store.store(encrypted_data)
             tree_obj.add_entry(path=file_path, blob_id=blob_id, size=len(plaintext))
+            total_bytes += len(plaintext)
+
+            if on_progress:
+                on_progress('file', file_path, dict(index=idx + 1, total=len(file_map),
+                                                     size=len(plaintext), total_bytes=total_bytes))
 
         now       = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
         version   = tree_data.get('version', 1)
@@ -142,6 +156,10 @@ class Vault__Sync(Type_Safe):
             json.dump(tree_data, f, indent=2)
         with open(os.path.join(sg_vault_dir, SETTINGS_FILE), 'w') as f:
             json.dump(settings_data, f, indent=2)
+
+        if on_progress:
+            on_progress('done', directory, dict(total_files=len(file_map), total_bytes=total_bytes,
+                                                 commit_id=commit_id, version=version))
 
         return directory
 

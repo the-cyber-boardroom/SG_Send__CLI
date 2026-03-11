@@ -145,7 +145,8 @@ class Test_CLI__Vault_Clone:
         with patch.object(self.cli_vault, 'create_sync', return_value=self.sync):
             self.cli_vault.cmd_clone(args)
         output = capsys.readouterr().out
-        assert 'Cloned vault' in output
+        assert 'Clone complete' in output
+        assert 'Cloned to' in output
 
 
 class Test_CLI__Vault_Status:
@@ -438,6 +439,12 @@ class Test_CLI__Main_Parser:
         cli_main = CLI__Main()
         with pytest.raises(SystemExit) as exc_info:
             cli_main.run(['--help'])
+        assert exc_info.value.code == 0
+
+    def test_version_flag(self):
+        cli_main = CLI__Main()
+        with pytest.raises(SystemExit) as exc_info:
+            cli_main.run(['--version'])
         assert exc_info.value.code == 0
 
     def test_main_entry_point(self):
