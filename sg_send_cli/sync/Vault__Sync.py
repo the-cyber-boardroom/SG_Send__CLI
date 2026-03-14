@@ -12,6 +12,8 @@ from   sg_send_cli.api.Vault__API                    import Vault__API
 from   sg_send_cli.sync.Vault__Legacy_Guard          import Vault__Legacy_Guard
 from   sg_send_cli.sync.Vault__Storage               import Vault__Storage
 from   sg_send_cli.sync.Vault__Branch_Manager        import Vault__Branch_Manager
+from   sg_send_cli.sync.Vault__Fetch                 import Vault__Fetch
+from   sg_send_cli.sync.Vault__Merge                 import Vault__Merge
 from   sg_send_cli.objects.Vault__Object_Store       import Vault__Object_Store
 from   sg_send_cli.objects.Vault__Ref_Manager        import Vault__Ref_Manager
 from   sg_send_cli.objects.Vault__Commit             import Vault__Commit
@@ -622,6 +624,211 @@ class Vault__Sync(Type_Safe):
 
         return dict(added=added, modified=modified, deleted=deleted,
                     clean=not added and not modified and not deleted)
+
+    def pull_v2(self, directory: str) -> dict:
+        """Fetch named branch state and merge into clone branch.
+
+        Workflow:
+        1. Read local config to find clone branch
+        2. Find named branch in branch index
+        3. Read named branch ref (remote state) and clone branch ref (local state)
+        4. Find LCA of both heads
+        5. Three-way merge: base=LCA tree, ours=clone tree, theirs=named tree
+        6. If no conflicts, create merge commit on clone branch
+        7. If conflicts, write .conflict files and return conflict info
+        8. Update working directory with merged files
+        """
+        vault_key  = self._read_vault_key(directory)
+        keys       = self.crypto.derive_keys_from_vault_key(vault_key)
+        read_key   = keys['read_key_bytes']
+        sg_dir     = os.path.join(directory, SG_VAULT_DIR)
+
+        storage     = Vault__Storage()
+        pki         = PKI__Crypto()
+        obj_store   = Vault__Object_Store(vault_path=sg_dir, crypto=self.crypto, use_v2=True)
+        ref_manager = Vault__Ref_Manager(vault_path=sg_dir, crypto=self.crypto, use_v2=True)
+
+        local_config   = self._read_local_config(directory, storage)
+        clone_branch_id = str(local_config.my_branch_id)
+
+        key_manager    = Vault__Key_Manager(vault_path=sg_dir, crypto=self.crypto, pki=pki)
+        branch_manager = Vault__Branch_Manager(vault_path=sg_dir, crypto=self.crypto,
+                                               key_manager=key_manager, ref_manager=ref_manager,
+                                               storage=storage)
+
+        index_id = branch_manager.find_branch_index_id(directory)
+        if not index_id:
+            raise RuntimeError('No branch index found')
+        branch_index = branch_manager.load_branch_index(directory, index_id, read_key)
+
+        clone_meta = branch_manager.get_branch_by_id(branch_index, clone_branch_id)
+        if not clone_meta:
+            raise RuntimeError(f'Clone branch not found: {clone_branch_id}')
+
+        named_meta = branch_manager.get_branch_by_name(branch_index, 'current')
+        if not named_meta:
+            raise RuntimeError('Named branch "current" not found')
+
+        clone_commit_id = ref_manager.read_ref(str(clone_meta.head_ref_id), read_key)
+        named_commit_id = ref_manager.read_ref(str(named_meta.head_ref_id), read_key)
+
+        if not named_commit_id:
+            return dict(status='up_to_date', message='Named branch has no commits')
+
+        if clone_commit_id == named_commit_id:
+            return dict(status='up_to_date', message='Already up to date')
+
+        vault_commit = Vault__Commit(crypto=self.crypto, pki=pki,
+                                     object_store=obj_store, ref_manager=ref_manager)
+        fetcher      = Vault__Fetch(crypto=self.crypto, api=self.api, storage=storage)
+        merger       = Vault__Merge(crypto=self.crypto)
+
+        lca_id = fetcher.find_lca(obj_store, read_key, clone_commit_id, named_commit_id)
+
+        base_tree = Schema__Object_Tree(schema='tree_v1')
+        if lca_id:
+            lca_commit = vault_commit.load_commit(lca_id, read_key)
+            base_tree  = vault_commit.load_tree(str(lca_commit.tree_id), read_key)
+
+        ours_tree = Schema__Object_Tree(schema='tree_v1')
+        if clone_commit_id:
+            ours_commit = vault_commit.load_commit(clone_commit_id, read_key)
+            ours_tree   = vault_commit.load_tree(str(ours_commit.tree_id), read_key)
+
+        named_commit = vault_commit.load_commit(named_commit_id, read_key)
+        theirs_tree  = vault_commit.load_tree(str(named_commit.tree_id), read_key)
+
+        merge_result = merger.three_way_merge(base_tree, ours_tree, theirs_tree)
+        merged_tree  = merge_result['merged_tree']
+        conflicts    = merge_result['conflicts']
+
+        # Write merged files to working directory
+        self._checkout_tree(directory, merged_tree, obj_store, read_key)
+
+        # Remove files that were deleted in the merge
+        self._remove_deleted_files(directory, ours_tree, merged_tree)
+
+        if conflicts:
+            conflict_files = merger.write_conflict_files(directory, conflicts,
+                                                         ours_tree, theirs_tree,
+                                                         obj_store, read_key)
+            # Save merge state for merge_abort
+            merge_state = dict(clone_commit_id = clone_commit_id,
+                               named_commit_id = named_commit_id,
+                               lca_id          = lca_id,
+                               conflicts       = conflicts)
+            merge_state_path = os.path.join(storage.local_dir(directory), 'merge_state.json')
+            with open(merge_state_path, 'w') as f:
+                json.dump(merge_state, f, indent=2)
+
+            return dict(status         = 'conflicts',
+                        conflicts      = conflicts,
+                        conflict_files = conflict_files,
+                        added          = merge_result['added'],
+                        modified       = merge_result['modified'],
+                        deleted        = merge_result['deleted'])
+
+        # No conflicts — create merge commit
+        signing_key = None
+        try:
+            signing_key = key_manager.load_private_key_locally(
+                str(clone_meta.public_key_id), storage.local_dir(directory))
+        except (FileNotFoundError, Exception):
+            pass
+
+        parent_ids = [clone_commit_id, named_commit_id]
+        parent_ids = [p for p in parent_ids if p]
+
+        merge_commit_id = vault_commit.create_commit(
+            tree        = merged_tree,
+            read_key    = read_key,
+            parent_ids  = parent_ids,
+            message     = f'Merge {str(named_meta.name)} into {str(clone_meta.name)}',
+            branch_id   = clone_branch_id,
+            signing_key = signing_key)
+
+        ref_manager.write_ref(str(clone_meta.head_ref_id), merge_commit_id, read_key)
+        ref_manager.write_head(merge_commit_id)
+
+        return dict(status    = 'merged',
+                    commit_id = merge_commit_id,
+                    added     = merge_result['added'],
+                    modified  = merge_result['modified'],
+                    deleted   = merge_result['deleted'],
+                    conflicts = [])
+
+    def merge_abort(self, directory: str) -> dict:
+        """Abort an in-progress merge by restoring the pre-merge state."""
+        vault_key  = self._read_vault_key(directory)
+        keys       = self.crypto.derive_keys_from_vault_key(vault_key)
+        read_key   = keys['read_key_bytes']
+        sg_dir     = os.path.join(directory, SG_VAULT_DIR)
+
+        storage     = Vault__Storage()
+        pki         = PKI__Crypto()
+        obj_store   = Vault__Object_Store(vault_path=sg_dir, crypto=self.crypto, use_v2=True)
+        ref_manager = Vault__Ref_Manager(vault_path=sg_dir, crypto=self.crypto, use_v2=True)
+        merger      = Vault__Merge(crypto=self.crypto)
+
+        merge_state_path = os.path.join(storage.local_dir(directory), 'merge_state.json')
+        if not os.path.isfile(merge_state_path):
+            raise RuntimeError('No merge in progress')
+
+        with open(merge_state_path, 'r') as f:
+            merge_state = json.load(f)
+
+        clone_commit_id = merge_state['clone_commit_id']
+
+        vault_commit = Vault__Commit(crypto=self.crypto, pki=pki,
+                                     object_store=obj_store, ref_manager=ref_manager)
+
+        if clone_commit_id:
+            ours_commit = vault_commit.load_commit(clone_commit_id, read_key)
+            ours_tree   = vault_commit.load_tree(str(ours_commit.tree_id), read_key)
+            self._checkout_tree(directory, ours_tree, obj_store, read_key)
+
+        removed = merger.remove_conflict_files(directory)
+        os.remove(merge_state_path)
+
+        return dict(status          = 'aborted',
+                    restored_commit = clone_commit_id,
+                    removed_files   = removed)
+
+    def _checkout_tree(self, directory: str, tree: Schema__Object_Tree,
+                       obj_store: Vault__Object_Store, read_key: bytes) -> None:
+        """Write all files from a tree to the working directory."""
+        for entry in tree.entries:
+            path    = str(entry.path) if entry.path else str(entry.name)
+            blob_id = str(entry.blob_id) if entry.blob_id else None
+            if not blob_id:
+                continue
+            try:
+                ciphertext = obj_store.load(blob_id)
+                plaintext  = self.crypto.decrypt(read_key, ciphertext)
+                full_path  = os.path.join(directory, path)
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                with open(full_path, 'wb') as f:
+                    f.write(plaintext)
+            except Exception:
+                pass
+
+    def _remove_deleted_files(self, directory: str, old_tree: Schema__Object_Tree,
+                              new_tree: Schema__Object_Tree) -> None:
+        """Remove files that exist in old_tree but not in new_tree."""
+        old_paths = set()
+        for entry in old_tree.entries:
+            path = str(entry.path) if entry.path else str(entry.name)
+            old_paths.add(path)
+
+        new_paths = set()
+        for entry in new_tree.entries:
+            path = str(entry.path) if entry.path else str(entry.name)
+            new_paths.add(path)
+
+        for path in old_paths - new_paths:
+            full_path = os.path.join(directory, path)
+            if os.path.isfile(full_path):
+                os.remove(full_path)
 
     def _read_local_config(self, directory: str, storage: Vault__Storage) -> Schema__Local_Config:
         config_path = storage.local_config_path(directory)
