@@ -106,6 +106,9 @@ class Vault__Crypto(Type_Safe):
         aesgcm     = AESGCM(key)
         return aesgcm.decrypt(iv, ciphertext, None)
 
+    def content_hash(self, plaintext: bytes) -> str:
+        return hashlib.sha256(plaintext).hexdigest()[:12]
+
     def hash_data(self, data: bytes) -> str:
         return hashlib.sha256(data).hexdigest()
 
