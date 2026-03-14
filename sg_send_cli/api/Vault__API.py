@@ -59,7 +59,9 @@ class Vault__API(Type_Safe):
 
         Returns a list of file_id strings.
         """
-        url = f'{self.base_url}/api/vault/list/{vault_id}/{prefix}'
+        url = f'{self.base_url}/api/vault/list/{vault_id}'
+        if prefix:
+            url = f'{url}?prefix={prefix}'
         return self._request('GET', url)
 
     def _request(self, method: str, url: str, headers: dict = None, data: bytes = None) -> dict:
