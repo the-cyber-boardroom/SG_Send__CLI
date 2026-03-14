@@ -134,3 +134,104 @@ class Test_Vault__Merge:
         result = self.merger.three_way_merge(base, ours, theirs)
         assert result['conflicts'] == []
         assert len(result['merged_tree'].entries) == 0
+
+    def test_ours_deletes_theirs_modifies_conflict(self):
+        base   = self._make_tree({'a.txt': 'aabbccddeeff'})
+        ours   = self._make_tree({})
+        theirs = self._make_tree({'a.txt': '112233445566'})
+        result = self.merger.three_way_merge(base, ours, theirs)
+        assert 'a.txt' in result['conflicts']
+        paths = [str(e.path) for e in result['merged_tree'].entries]
+        assert 'a.txt' in paths
+
+    def test_ours_deletes_theirs_unchanged(self):
+        base   = self._make_tree({'a.txt': 'aabbccddeeff'})
+        ours   = self._make_tree({})
+        theirs = self._make_tree({'a.txt': 'aabbccddeeff'})
+        result = self.merger.three_way_merge(base, ours, theirs)
+        assert result['conflicts'] == []
+        paths = [str(e.path) for e in result['merged_tree'].entries]
+        assert 'a.txt' not in paths
+
+
+class Test_Vault__Merge__Conflict_Files:
+
+    def setup_method(self):
+        self.tmp_dir   = tempfile.mkdtemp()
+        self.crypto    = Vault__Crypto()
+        self.merger    = Vault__Merge(crypto=self.crypto)
+        self.read_key  = os.urandom(32)
+
+        sg_dir = os.path.join(self.tmp_dir, '.sg_vault', 'bare', 'data')
+        os.makedirs(sg_dir, exist_ok=True)
+        self.obj_store = Vault__Object_Store(vault_path=os.path.join(self.tmp_dir, '.sg_vault'),
+                                              crypto=self.crypto, use_v2=True)
+
+    def teardown_method(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _store_blob(self, content: bytes) -> str:
+        encrypted = self.crypto.encrypt(self.read_key, content)
+        return self.obj_store.store(encrypted)
+
+    def _make_tree(self, entries_dict: dict) -> Schema__Object_Tree:
+        tree = Schema__Object_Tree(schema='tree_v1')
+        for path, blob_id in entries_dict.items():
+            tree.entries.append(Schema__Object_Tree_Entry(path=path, blob_id=blob_id, size=10))
+        return tree
+
+    def test_write_conflict_files_creates_files(self):
+        content    = b'theirs version content'
+        blob_id    = self._store_blob(content)
+        ours_tree  = self._make_tree({'a.txt': 'aabbccddeeff'})
+        theirs_tree = self._make_tree({'a.txt': blob_id})
+        conflicts  = ['a.txt']
+
+        written = self.merger.write_conflict_files(self.tmp_dir, conflicts,
+                                                    ours_tree, theirs_tree,
+                                                    self.obj_store, self.read_key)
+        assert 'a.txt.conflict' in written
+        conflict_path = os.path.join(self.tmp_dir, 'a.txt.conflict')
+        assert os.path.isfile(conflict_path)
+        with open(conflict_path, 'rb') as f:
+            assert f.read() == content
+
+    def test_write_conflict_files_skips_missing_entry(self):
+        ours_tree   = self._make_tree({'a.txt': 'aabbccddeeff'})
+        theirs_tree = self._make_tree({})
+        conflicts   = ['a.txt']
+
+        written = self.merger.write_conflict_files(self.tmp_dir, conflicts,
+                                                    ours_tree, theirs_tree,
+                                                    self.obj_store, self.read_key)
+        assert written == []
+
+    def test_remove_conflict_files(self):
+        conflict_path = os.path.join(self.tmp_dir, 'a.txt.conflict')
+        with open(conflict_path, 'w') as f:
+            f.write('conflict content')
+
+        removed = self.merger.remove_conflict_files(self.tmp_dir)
+        assert len(removed) == 1
+        assert 'a.txt.conflict' in removed[0]
+        assert not os.path.isfile(conflict_path)
+
+    def test_remove_conflict_files_empty(self):
+        removed = self.merger.remove_conflict_files(self.tmp_dir)
+        assert removed == []
+
+    def test_has_conflicts_true(self):
+        conflict_path = os.path.join(self.tmp_dir, 'a.txt.conflict')
+        with open(conflict_path, 'w') as f:
+            f.write('conflict')
+        assert self.merger.has_conflicts(self.tmp_dir) is True
+
+    def test_has_conflicts_false(self):
+        assert self.merger.has_conflicts(self.tmp_dir) is False
+
+    def test_has_conflicts_ignores_hidden_dirs(self):
+        hidden_dir = os.path.join(self.tmp_dir, '.hidden')
+        os.makedirs(hidden_dir)
+        with open(os.path.join(hidden_dir, 'x.conflict'), 'w') as f:
+            f.write('hidden')
+        assert self.merger.has_conflicts(self.tmp_dir) is False

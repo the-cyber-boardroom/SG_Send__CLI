@@ -12,6 +12,7 @@ from sg_send_cli.crypto.PKI__Crypto          import PKI__Crypto
 from sg_send_cli.api.Vault__API              import Vault__API
 from sg_send_cli.schemas.Schema__Object_Tree       import Schema__Object_Tree
 from sg_send_cli.schemas.Schema__Object_Tree_Entry import Schema__Object_Tree_Entry
+from tests.conftest                                import Vault__API__In_Memory
 
 
 class Test_Vault__Fetch:
@@ -93,3 +94,33 @@ class Test_Vault__Fetch:
         c2 = self._create_commit()  # totally separate
         lca = self.fetcher.find_lca(self.obj_store, self.read_key, c1, c2)
         assert lca is None
+
+    def test_fetch_commit_chain_limit(self):
+        c1 = self._create_commit()
+        c2 = self._create_commit(parent_ids=[c1])
+        c3 = self._create_commit(parent_ids=[c2])
+        chain = self.fetcher.fetch_commit_chain(self.obj_store, self.read_key, c3, limit=2)
+        assert len(chain) == 2
+        assert chain[0] == c3
+        assert chain[1] == c2
+
+    def test_fetch_commit_chain_invalid_commit(self):
+        chain = self.fetcher.fetch_commit_chain(self.obj_store, self.read_key, 'nonexistent')
+        assert chain == ['nonexistent']
+
+    def test_find_lca_with_none_commits(self):
+        lca = self.fetcher.find_lca(self.obj_store, self.read_key, None, None)
+        assert lca is None
+
+    def test_fetch_named_branch_state(self):
+        ref_id    = 'ref-' + os.urandom(8).hex()
+        commit_id = self._create_commit()
+        self.ref_mgr.write_ref(ref_id, commit_id, self.read_key)
+        api     = Vault__API__In_Memory()
+        api.setup()
+        fetcher = Vault__Fetch(crypto=self.crypto, api=api, storage=self.storage)
+        result  = fetcher.fetch_named_branch_state(self.tmp_dir, 'test-vault',
+                                                     self.read_key, 'write-key',
+                                                     ref_id)
+        assert result['remote_commit_id'] == commit_id
+        assert result['named_ref_id']     == ref_id

@@ -6,12 +6,12 @@ import pytest
 from types         import SimpleNamespace
 
 from sg_send_cli.crypto.Vault__Crypto     import Vault__Crypto
-from sg_send_cli.api.Vault__API           import Vault__API
 from sg_send_cli.sync.Vault__Sync         import Vault__Sync
 from sg_send_cli.cli.CLI__Token_Store     import CLI__Token_Store
 from sg_send_cli.cli.CLI__Vault           import CLI__Vault
 from sg_send_cli.cli.CLI__Main            import CLI__Main
 from sg_send_cli.cli                      import main
+from sg_send_cli.api.Vault__API           import Vault__API
 
 
 class Test_CLI__Token_Store:

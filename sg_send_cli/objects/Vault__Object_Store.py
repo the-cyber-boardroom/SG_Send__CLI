@@ -51,7 +51,7 @@ class Vault__Object_Store(Type_Safe):
             suffix = raw_id[2:]
             return os.path.join(self.vault_path, OBJECTS_DIR, prefix, suffix)
 
-    def all_object_ids(self) -> list:
+    def all_object_ids(self) -> list[str]:
         result = []
         if self.use_v2:
             data_dir = os.path.join(self.vault_path, BARE_DATA_DIR)

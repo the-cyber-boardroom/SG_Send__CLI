@@ -6,7 +6,6 @@ import shutil
 from sg_send_cli.crypto.Vault__Crypto              import Vault__Crypto
 from sg_send_cli.crypto.PKI__Crypto                import PKI__Crypto
 from sg_send_cli.crypto.Vault__Key_Manager         import Vault__Key_Manager
-from sg_send_cli.api.Vault__API                    import Vault__API
 from sg_send_cli.sync.Vault__Sync                  import Vault__Sync
 from sg_send_cli.sync.Vault__Storage               import Vault__Storage
 from sg_send_cli.sync.Vault__Branch_Manager        import Vault__Branch_Manager
@@ -15,23 +14,7 @@ from sg_send_cli.objects.Vault__Ref_Manager        import Vault__Ref_Manager
 from sg_send_cli.objects.Vault__Commit             import Vault__Commit
 from sg_send_cli.schemas.Schema__Object_Tree       import Schema__Object_Tree
 from sg_send_cli.schemas.Schema__Object_Tree_Entry import Schema__Object_Tree_Entry
-
-
-class Vault__API__In_Memory(Vault__API):
-
-    def setup(self):
-        self._store = {}
-        return self
-
-    def write(self, vault_id: str, file_id: str, write_key: str, payload: bytes) -> dict:
-        self._store[f'{vault_id}/{file_id}'] = payload
-        return {'status': 'ok'}
-
-    def read(self, vault_id: str, file_id: str) -> bytes:
-        key = f'{vault_id}/{file_id}'
-        if key not in self._store:
-            raise RuntimeError(f'Not found: {key}')
-        return self._store[key]
+from tests.conftest                                import Vault__API__In_Memory
 
 
 class Test_Vault__Sync__Pull_V2:

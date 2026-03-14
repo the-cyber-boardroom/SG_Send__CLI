@@ -1,7 +1,6 @@
 import os
-from osbot_utils.type_safe.Type_Safe import Type_Safe
-
-SG_VAULT_DIR    = '.sg_vault'
+from osbot_utils.type_safe.Type_Safe         import Type_Safe
+from sg_send_cli.sync.Vault__Storage         import SG_VAULT_DIR
 LEGACY_TREE     = 'tree.json'
 NEW_REFS_HEAD   = os.path.join('refs', 'head')
 

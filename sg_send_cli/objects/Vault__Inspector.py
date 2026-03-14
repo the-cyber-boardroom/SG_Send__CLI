@@ -7,8 +7,7 @@ from sg_send_cli.objects.Vault__Ref_Manager   import Vault__Ref_Manager
 from sg_send_cli.schemas.Schema__Object_Commit import Schema__Object_Commit
 from sg_send_cli.schemas.Schema__Object_Tree   import Schema__Object_Tree
 from sg_send_cli.schemas.Schema__Object_Ref    import Schema__Object_Ref
-
-SG_VAULT_DIR = '.sg_vault'
+from sg_send_cli.sync.Vault__Storage           import SG_VAULT_DIR
 
 
 class Vault__Inspector(Type_Safe):

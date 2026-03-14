@@ -7,8 +7,7 @@ from sg_send_cli.objects.Vault__Ref_Manager         import Vault__Ref_Manager
 from sg_send_cli.schemas.Schema__Object_Commit      import Schema__Object_Commit
 from sg_send_cli.schemas.Schema__Object_Tree        import Schema__Object_Tree
 
-SG_VAULT_DIR   = '.sg_vault'
-VAULT_KEY_FILE = 'VAULT-KEY'
+from sg_send_cli.sync.Vault__Storage          import SG_VAULT_DIR, VAULT_KEY_FILE
 TOKEN_FILE     = 'token'
 TREE_FILE      = 'tree.json'
 SETTINGS_FILE  = 'settings.json'

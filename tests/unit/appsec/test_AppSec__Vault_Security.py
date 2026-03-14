@@ -8,28 +8,8 @@ from sg_send_cli.objects.Vault__Ref_Manager        import Vault__Ref_Manager
 from sg_send_cli.schemas.Schema__Object_Commit     import Schema__Object_Commit
 from sg_send_cli.schemas.Schema__Object_Tree       import Schema__Object_Tree
 from sg_send_cli.sync.Vault__Sync                  import Vault__Sync, SG_VAULT_DIR, VAULT_KEY_FILE
-from sg_send_cli.api.Vault__API                    import Vault__API
 from sg_send_cli.secrets.Secrets__Store            import Secrets__Store
-
-
-class Vault__API__In_Memory(Vault__API):
-    def setup(self):
-        self._store = {}
-        return self
-
-    def write(self, vault_id, file_id, write_key, payload):
-        self._store[f'{vault_id}/{file_id}'] = payload
-        return {'status': 'ok'}
-
-    def read(self, vault_id, file_id):
-        key = f'{vault_id}/{file_id}'
-        if key not in self._store:
-            raise RuntimeError(f'Not found: {key}')
-        return self._store[key]
-
-    def delete(self, vault_id, file_id, write_key):
-        self._store.pop(f'{vault_id}/{file_id}', None)
-        return {'status': 'ok'}
+from tests.conftest                                import Vault__API__In_Memory
 
 
 class Test_AppSec__No_Plaintext_In_Object_Store:

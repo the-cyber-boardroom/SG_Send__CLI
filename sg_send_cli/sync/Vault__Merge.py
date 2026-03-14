@@ -129,11 +129,11 @@ class Vault__Merge(Type_Safe):
                     modified    = modified,
                     deleted     = deleted)
 
-    def write_conflict_files(self, directory: str, conflicts: list,
+    def write_conflict_files(self, directory: str, conflicts: list[str],
                              ours_tree: Schema__Object_Tree,
                              theirs_tree: Schema__Object_Tree,
                              obj_store: Vault__Object_Store,
-                             read_key: bytes) -> list:
+                             read_key: bytes) -> list[str]:
         """Write .conflict files for conflicting paths, containing theirs version."""
         theirs_map     = self._tree_to_map(theirs_tree)
         written_files  = []
@@ -158,7 +158,7 @@ class Vault__Merge(Type_Safe):
 
         return written_files
 
-    def remove_conflict_files(self, directory: str) -> list:
+    def remove_conflict_files(self, directory: str) -> list[str]:
         """Remove all .conflict files from the working directory."""
         removed = []
         for root, dirs, files in os.walk(directory):
@@ -180,7 +180,7 @@ class Vault__Merge(Type_Safe):
                     return True
         return False
 
-    def _tree_to_map(self, tree: Schema__Object_Tree) -> dict:
+    def _tree_to_map(self, tree: Schema__Object_Tree) -> dict[str, Schema__Object_Tree_Entry]:
         result = {}
         for entry in tree.entries:
             path = str(entry.path) if entry.path else str(entry.name)

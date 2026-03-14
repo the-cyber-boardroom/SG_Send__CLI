@@ -7,8 +7,6 @@ from   sg_send_cli.objects.Vault__Object_Store       import Vault__Object_Store
 from   sg_send_cli.objects.Vault__Ref_Manager        import Vault__Ref_Manager
 from   sg_send_cli.objects.Vault__Commit             import Vault__Commit
 from   sg_send_cli.crypto.PKI__Crypto                import PKI__Crypto
-from   sg_send_cli.schemas.Schema__Object_Commit     import Schema__Object_Commit
-from   sg_send_cli.schemas.Schema__Object_Tree       import Schema__Object_Tree
 from   sg_send_cli.sync.Vault__Storage               import Vault__Storage
 
 
@@ -40,7 +38,7 @@ class Vault__Fetch(Type_Safe):
 
     def fetch_commit_chain(self, obj_store: Vault__Object_Store, read_key: bytes,
                            from_commit_id: str, stop_at: str = None,
-                           limit: int = 100) -> list:
+                           limit: int = 100) -> list[str]:
         """Walk the commit chain backwards from from_commit_id, collecting commit IDs.
 
         Stops when reaching stop_at, a root commit (no parents), or the limit.

@@ -64,7 +64,7 @@ class Vault__Ref_Manager(Type_Safe):
             with open(path, 'r') as f:
                 return f.read().strip()
 
-    def list_refs(self) -> list:
+    def list_refs(self) -> list[str]:
         refs_dir = os.path.join(self.vault_path, BARE_REFS_DIR)
         if not os.path.isdir(refs_dir):
             return []

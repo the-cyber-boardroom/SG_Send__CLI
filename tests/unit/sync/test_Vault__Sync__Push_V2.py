@@ -9,7 +9,6 @@ import pytest
 from sg_send_cli.crypto.Vault__Crypto              import Vault__Crypto
 from sg_send_cli.crypto.PKI__Crypto                import PKI__Crypto
 from sg_send_cli.crypto.Vault__Key_Manager         import Vault__Key_Manager
-from sg_send_cli.api.Vault__API                    import Vault__API
 from sg_send_cli.sync.Vault__Sync                  import Vault__Sync
 from sg_send_cli.sync.Vault__Storage               import Vault__Storage
 from sg_send_cli.sync.Vault__Branch_Manager        import Vault__Branch_Manager
@@ -18,6 +17,7 @@ from sg_send_cli.objects.Vault__Ref_Manager        import Vault__Ref_Manager
 from sg_send_cli.objects.Vault__Commit             import Vault__Commit
 from sg_send_cli.schemas.Schema__Object_Tree       import Schema__Object_Tree
 from sg_send_cli.schemas.Schema__Object_Tree_Entry import Schema__Object_Tree_Entry
+from sg_send_cli.api.Vault__API                    import Vault__API
 
 
 class Vault__API__In_Memory(Vault__API):

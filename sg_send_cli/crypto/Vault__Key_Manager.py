@@ -69,7 +69,7 @@ class Vault__Key_Manager(Type_Safe):
     def key_exists(self, key_id: str) -> bool:
         return os.path.isfile(self._key_path(key_id))
 
-    def list_keys(self) -> list:
+    def list_keys(self) -> list[str]:
         keys_dir = os.path.join(self.vault_path, BARE_KEYS_DIR)
         if not os.path.isdir(keys_dir):
             return []
