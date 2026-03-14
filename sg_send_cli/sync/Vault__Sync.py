@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import secrets
@@ -159,13 +160,16 @@ class Vault__Sync(Type_Safe):
             with open(local_file, 'rb') as f:
                 content = f.read()
 
+            file_hash = self.crypto.content_hash(content)
             old_entry = old_entries.get(path)
-            if old_entry and int(old_entry.size) == len(content):
-                new_tree.entries.append(Schema__Object_Tree_Entry(path=path, blob_id=str(old_entry.blob_id), size=len(content)))
+            if old_entry and str(old_entry.content_hash or '') == file_hash:
+                new_tree.entries.append(Schema__Object_Tree_Entry(path=path, blob_id=str(old_entry.blob_id),
+                                                                  size=len(content), content_hash=file_hash))
             else:
                 encrypted = self.crypto.encrypt(read_key, content)
                 blob_id   = obj_store.store(encrypted)
-                new_tree.entries.append(Schema__Object_Tree_Entry(path=path, blob_id=blob_id, size=len(content)))
+                new_tree.entries.append(Schema__Object_Tree_Entry(path=path, blob_id=blob_id,
+                                                                  size=len(content), content_hash=file_hash))
 
         signing_key = None
         try:
@@ -230,7 +234,7 @@ class Vault__Sync(Type_Safe):
             old_tree   = vault_commit_reader.load_tree(str(old_commit.tree_id), read_key)
             for entry in old_tree.entries:
                 path = str(entry.path) if entry.path else str(entry.name)
-                old_entries[path] = int(entry.size)
+                old_entries[path] = entry
 
         new_file_map = self._scan_local_directory(directory)
 
@@ -244,7 +248,12 @@ class Vault__Sync(Type_Safe):
             local_file = os.path.join(directory, path)
             with open(local_file, 'rb') as f:
                 content = f.read()
-            if len(content) != old_entries[path]:
+            old_entry  = old_entries[path]
+            old_hash   = str(old_entry.content_hash or '') if old_entry.content_hash else ''
+            file_hash  = self.crypto.content_hash(content)
+            if old_hash and old_hash != file_hash:
+                modified.append(path)
+            elif not old_hash and len(content) != int(old_entry.size):
                 modified.append(path)
 
         return dict(added=added, modified=modified, deleted=deleted,
@@ -610,10 +619,17 @@ class Vault__Sync(Type_Safe):
         deleted   = len(old_paths - new_paths)
         modified  = 0
         for path in old_paths & new_paths:
-            old_size = int(old_entries[path].size) if hasattr(old_entries[path], 'size') else old_entries[path].get('size', -1) if isinstance(old_entries[path], dict) else -1
-            new_size = new_file_map[path].get('size', -2)
-            if old_size != new_size:
-                modified += 1
+            old_entry = old_entries[path]
+            old_hash  = str(old_entry.content_hash or '') if hasattr(old_entry, 'content_hash') and old_entry.content_hash else ''
+            new_hash  = new_file_map[path].get('content_hash', '')
+            if old_hash and new_hash:
+                if old_hash != new_hash:
+                    modified += 1
+            else:
+                old_size = int(old_entry.size) if hasattr(old_entry, 'size') else -1
+                new_size = new_file_map[path].get('size', -2)
+                if old_size != new_size:
+                    modified += 1
         return f'Commit: {added} added, {modified} modified, {deleted} deleted'
 
     # --- internal helpers ---
@@ -638,5 +654,8 @@ class Vault__Sync(Type_Safe):
                 full_path = os.path.join(root, filename)
                 rel_path  = os.path.relpath(full_path, directory)
                 rel_path  = rel_path.replace(os.sep, '/')
-                result[rel_path] = dict(size=os.path.getsize(full_path))
+                file_size = os.path.getsize(full_path)
+                with open(full_path, 'rb') as f:
+                    file_hash = hashlib.sha256(f.read()).hexdigest()[:12]
+                result[rel_path] = dict(size=file_size, content_hash=file_hash)
         return result
