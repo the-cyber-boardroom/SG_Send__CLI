@@ -23,6 +23,7 @@ import shutil
 import socket
 
 import pytest
+from osbot_utils.utils.Files import path_combine
 
 from sg_send_cli.api.Vault__API           import Vault__API
 from sg_send_cli.crypto.Vault__Crypto     import Vault__Crypto
@@ -32,7 +33,8 @@ from tests.qa.helpers                     import print_section, print_tree
 
 SERVER_PORT = 18321
 SERVER_URL  = f'http://127.0.0.1:{SERVER_PORT}'
-QA_DIR      = '/tmp/sg_vault_qa_init'
+#QA_DIR      = '/tmp/sg_vault_qa_init'
+QA_DIR      = path_combine(__file__, '../_vaults')
 VAULT_DIR   = os.path.join(QA_DIR, 'my-new-vault')
 CLONE_DIR   = os.path.join(QA_DIR, 'cloned-vault')
 VAULT_KEY   = 'qa-init-passphrase:qa-init-01'
@@ -221,11 +223,11 @@ class Test_QA__Vault_Init_Walkthrough:
     # Cleanup
     # -------------------------------------------------------------------------
 
-    def test__9__cleanup(self):
-        print_section('Step 9: Cleanup')
-
-        if os.path.exists(QA_DIR):
-            shutil.rmtree(QA_DIR)
-            print(f'  Removed: {QA_DIR}')
-        else:
-            print(f'  Nothing to clean up')
+    # def test__9__cleanup(self):
+    #     print_section('Step 9: Cleanup')
+    #
+    #     if os.path.exists(QA_DIR):
+    #         shutil.rmtree(QA_DIR)
+    #         print(f'  Removed: {QA_DIR}')
+    #     else:
+    #         print(f'  Nothing to clean up')
