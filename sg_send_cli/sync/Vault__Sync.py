@@ -27,6 +27,7 @@ from   sg_send_cli.schemas.Schema__Object_Tree_Entry import Schema__Object_Tree_
 from   sg_send_cli.schemas.Schema__Object_Ref        import Schema__Object_Ref
 from   sg_send_cli.schemas.Schema__Branch_Index      import Schema__Branch_Index
 from   sg_send_cli.schemas.Schema__Local_Config      import Schema__Local_Config
+from   sg_send_cli.sync.Vault__Components             import Vault__Components
 from   sg_send_cli.sync.Vault__Storage               import SG_VAULT_DIR, VAULT_KEY_FILE
 
 
@@ -114,13 +115,13 @@ class Vault__Sync(Type_Safe):
 
     def commit(self, directory: str, message: str = '') -> dict:
         c = self._init_components(directory)
-        read_key       = c['read_key']
-        storage        = c['storage']
-        pki            = c['pki']
-        obj_store      = c['obj_store']
-        ref_manager    = c['ref_manager']
-        key_manager    = c['key_manager']
-        branch_manager = c['branch_manager']
+        read_key       = c.read_key
+        storage        = c.storage
+        pki            = c.pki
+        obj_store      = c.obj_store
+        ref_manager    = c.ref_manager
+        key_manager    = c.key_manager
+        branch_manager = c.branch_manager
 
         local_config = self._read_local_config(directory, storage)
         branch_id    = str(local_config.my_branch_id)
@@ -194,12 +195,12 @@ class Vault__Sync(Type_Safe):
 
     def status(self, directory: str) -> dict:
         c = self._init_components(directory)
-        read_key       = c['read_key']
-        storage        = c['storage']
-        pki            = c['pki']
-        obj_store      = c['obj_store']
-        ref_manager    = c['ref_manager']
-        branch_manager = c['branch_manager']
+        read_key       = c.read_key
+        storage        = c.storage
+        pki            = c.pki
+        obj_store      = c.obj_store
+        ref_manager    = c.ref_manager
+        branch_manager = c.branch_manager
 
         local_config = self._read_local_config(directory, storage)
         branch_id    = str(local_config.my_branch_id)
@@ -265,13 +266,13 @@ class Vault__Sync(Type_Safe):
         self._auto_gc_drain(directory)
 
         c = self._init_components(directory)
-        read_key       = c['read_key']
-        storage        = c['storage']
-        pki            = c['pki']
-        obj_store      = c['obj_store']
-        ref_manager    = c['ref_manager']
-        key_manager    = c['key_manager']
-        branch_manager = c['branch_manager']
+        read_key       = c.read_key
+        storage        = c.storage
+        pki            = c.pki
+        obj_store      = c.obj_store
+        ref_manager    = c.ref_manager
+        key_manager    = c.key_manager
+        branch_manager = c.branch_manager
 
         local_config    = self._read_local_config(directory, storage)
         clone_branch_id = str(local_config.my_branch_id)
@@ -395,15 +396,15 @@ class Vault__Sync(Type_Safe):
         self._auto_gc_drain(directory)
 
         c = self._init_components(directory)
-        vault_id       = c['keys']['vault_id']
-        read_key       = c['read_key']
-        write_key      = c['keys']['write_key']
-        storage        = c['storage']
-        pki            = c['pki']
-        obj_store      = c['obj_store']
-        ref_manager    = c['ref_manager']
-        key_manager    = c['key_manager']
-        branch_manager = c['branch_manager']
+        vault_id       = c.vault_id
+        read_key       = c.read_key
+        write_key      = c.write_key
+        storage        = c.storage
+        pki            = c.pki
+        obj_store      = c.obj_store
+        ref_manager    = c.ref_manager
+        key_manager    = c.key_manager
+        branch_manager = c.branch_manager
 
         local_config    = self._read_local_config(directory, storage)
         clone_branch_id = str(local_config.my_branch_id)
@@ -493,13 +494,13 @@ class Vault__Sync(Type_Safe):
             if cid == named_commit_id:
                 continue
             commit_and_tree_ids.add(cid)
-            c       = vault_commit.load_commit(cid, read_key)
-            commit_and_tree_ids.add(str(c.tree_id))
+            chain_commit = vault_commit.load_commit(cid, read_key)
+            commit_and_tree_ids.add(str(chain_commit.tree_id))
 
         blob_count = sum(1 for op in operations
                          if op['file_id'].startswith('bare/data/') and
                             op['file_id'].replace('bare/data/', '') not in commit_and_tree_ids)
-        commit_count = len([c for c in commit_chain if c != named_commit_id])
+        commit_count = len([cid for cid in commit_chain if cid != named_commit_id])
 
         if use_batch:
             try:
@@ -571,11 +572,11 @@ class Vault__Sync(Type_Safe):
     def merge_abort(self, directory: str) -> dict:
         """Abort an in-progress merge by restoring the pre-merge state."""
         c = self._init_components(directory)
-        read_key    = c['read_key']
-        storage     = c['storage']
-        pki         = c['pki']
-        obj_store   = c['obj_store']
-        ref_manager = c['ref_manager']
+        read_key    = c.read_key
+        storage     = c.storage
+        pki         = c.pki
+        obj_store   = c.obj_store
+        ref_manager = c.ref_manager
         merger      = Vault__Merge(crypto=self.crypto)
 
         merge_state_path = os.path.join(storage.local_dir(directory), 'merge_state.json')
@@ -605,10 +606,10 @@ class Vault__Sync(Type_Safe):
     def branches(self, directory: str) -> dict:
         """List all branches in the vault."""
         c = self._init_components(directory)
-        read_key       = c['read_key']
-        storage        = c['storage']
-        ref_manager    = c['ref_manager']
-        branch_manager = c['branch_manager']
+        read_key       = c.read_key
+        storage        = c.storage
+        ref_manager    = c.ref_manager
+        branch_manager = c.branch_manager
 
         index_id = branch_manager.find_branch_index_id(directory)
         if not index_id:
@@ -767,7 +768,7 @@ class Vault__Sync(Type_Safe):
     def _entry_path(self, entry: Schema__Object_Tree_Entry) -> str:
         return str(entry.path) if entry.path else str(entry.name)
 
-    def _init_components(self, directory: str) -> dict:
+    def _init_components(self, directory: str) -> Vault__Components:
         vault_key   = self._read_vault_key(directory)
         keys        = self.crypto.derive_keys_from_vault_key(vault_key)
         sg_dir      = os.path.join(directory, SG_VAULT_DIR)
@@ -779,16 +780,17 @@ class Vault__Sync(Type_Safe):
         branch_manager = Vault__Branch_Manager(vault_path=sg_dir, crypto=self.crypto,
                                                key_manager=key_manager, ref_manager=ref_manager,
                                                storage=storage)
-        return dict(vault_key      = vault_key,
-                    keys           = keys,
-                    read_key       = keys['read_key_bytes'],
-                    sg_dir         = sg_dir,
-                    storage        = storage,
-                    pki            = pki,
-                    obj_store      = obj_store,
-                    ref_manager    = ref_manager,
-                    key_manager    = key_manager,
-                    branch_manager = branch_manager)
+        return Vault__Components(vault_key      = vault_key,
+                                 vault_id       = keys['vault_id'],
+                                 read_key       = keys['read_key_bytes'],
+                                 write_key      = keys['write_key'],
+                                 sg_dir         = sg_dir,
+                                 storage        = storage,
+                                 pki            = pki,
+                                 obj_store      = obj_store,
+                                 ref_manager    = ref_manager,
+                                 key_manager    = key_manager,
+                                 branch_manager = branch_manager)
 
     def _read_vault_key(self, directory: str) -> str:
         vault_key_path = os.path.join(directory, SG_VAULT_DIR, VAULT_KEY_FILE)
