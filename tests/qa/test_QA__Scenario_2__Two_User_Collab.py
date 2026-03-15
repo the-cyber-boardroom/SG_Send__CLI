@@ -43,7 +43,7 @@ def shared():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
-class Test_QA__Scenario_2__Solo_Init_And_Push:
+class Test_QA__A__Scenario_2__Solo_Init_And_Push:
     """Part A: Verify solo init→commit→push workflow as baseline for collaboration.
 
     This is the working foundation that Scenario 2 builds on.
@@ -85,7 +85,7 @@ class Test_QA__Scenario_2__Solo_Init_And_Push:
         print(f'  API store entries:  {len(shared["api"]._store)}')
 
 
-class Test_QA__Scenario_2__Clone:
+class Test_QA__B__Scenario_2__Clone:
     """Part B: Test User B cloning the vault that User A pushed.
 
     The arch doc (v6 Step 2.1) describes User B cloning with:
@@ -111,7 +111,7 @@ class Test_QA__Scenario_2__Clone:
             shutil.rmtree(clone_dir, ignore_errors=True)
 
 
-class Test_QA__Scenario_2__What_Works_Today:
+class Test_QA__C__Scenario_2__What_Works_Today:
     """Part C: Test what DOES work for the collaboration building blocks.
 
     These tests verify the individual pieces that will compose into
@@ -229,7 +229,7 @@ class Test_QA__Scenario_2__What_Works_Today:
         print(f'    commits are local operations, push uploads the delta.')
 
 
-class Test_QA__Scenario_2__Arch_V6_Predictions:
+class Test_QA__D__Scenario_2__Arch_V6_Predictions:
     """Part D: Validate specific predictions from arch-simulation-v6.
 
     Tests each prediction against the real implementation and reports
