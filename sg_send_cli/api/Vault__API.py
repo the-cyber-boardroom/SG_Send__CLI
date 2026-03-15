@@ -1,14 +1,17 @@
+import base64
 import json
-from   urllib.request                  import Request, urlopen
-from   urllib.error                    import HTTPError
-from   osbot_utils.type_safe.Type_Safe import Type_Safe
+from   urllib.request                                import Request, urlopen
+from   urllib.error                                  import HTTPError
+from   osbot_utils.type_safe.Type_Safe               import Type_Safe
+from   sg_send_cli.safe_types.Safe_Str__Base_URL     import Safe_Str__Base_URL
+from   sg_send_cli.safe_types.Safe_Str__Access_Token import Safe_Str__Access_Token
 
 DEFAULT_BASE_URL = 'https://send.sgraph.ai'
 
 
 class Vault__API(Type_Safe):
-    base_url     : str
-    access_token : str
+    base_url     : Safe_Str__Base_URL     = None
+    access_token : Safe_Str__Access_Token = None
 
     def setup(self):
         if not self.base_url:
@@ -31,6 +34,35 @@ class Vault__API(Type_Safe):
         headers = {'x-sgraph-access-token': self.access_token,
                     'x-sgraph-vault-write-key'  : write_key}
         return self._request('DELETE', url, headers)
+
+    def batch(self, vault_id: str, write_key: str, operations: list) -> dict:
+        """Execute a batch of operations atomically.
+
+        Each operation is a dict with:
+            op      : 'write' | 'write-if-match' | 'delete'
+            file_id : str
+            data    : base64-encoded bytes (for write ops)
+            match   : SHA256 hash of current content (for write-if-match)
+
+        Returns dict with status and per-operation results.
+        If any write-if-match fails, the entire batch is rejected.
+        """
+        url     = f'{self.base_url}/api/vault/batch/{vault_id}'
+        headers = {'Content-Type'             : 'application/json',
+                   'x-sgraph-access-token'    : self.access_token,
+                   'x-sgraph-vault-write-key' : write_key}
+        payload = json.dumps({'operations': operations}).encode('utf-8')
+        return self._request('POST', url, headers, payload)
+
+    def list_files(self, vault_id: str, prefix: str = '') -> list:
+        """List file IDs in a vault, optionally filtered by prefix.
+
+        Returns a list of file_id strings.
+        """
+        url = f'{self.base_url}/api/vault/list/{vault_id}'
+        if prefix:
+            url = f'{url}?prefix={prefix}'
+        return self._request('GET', url)
 
     def _request(self, method: str, url: str, headers: dict = None, data: bytes = None) -> dict:
         req = Request(url, data=data, method=method)

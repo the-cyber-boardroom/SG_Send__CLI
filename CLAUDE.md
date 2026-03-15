@@ -66,6 +66,12 @@ class Schema__Vault_Meta(Type_Safe):
     name     : Safe_Str__Vault_Name = None
 ```
 
+### CLI Rules
+
+7. **No code in `cli/__init__.py`.** The `cli/__init__.py` file must only contain imports and the `main()` entry point delegation. All command logic lives in dedicated `CLI__*` classes (e.g., `CLI__Vault`, `CLI__PKI`).
+
+8. **No `__init__.py` files in tests.** Only the main source code (`sg_send_cli/`) should have `__init__.py` files. The `tests/` directory tree must not contain any `__init__.py` files.
+
 ### Crypto Interop Requirement
 
 All crypto operations (AES-256-GCM, HKDF-SHA256, PBKDF2) must produce output that matches the browser (Web Crypto API) byte-for-byte given the same inputs. Test vectors are mandatory.
@@ -73,8 +79,8 @@ All crypto operations (AES-256-GCM, HKDF-SHA256, PBKDF2) must produce output tha
 ## Commands
 
 ```bash
-# Run all tests
-pytest
+# Run all unit tests (Python 3.11 default)
+pytest tests/unit/
 
 # Run specific test file
 pytest tests/unit/safe_types/test_Safe_Str__Vault_Id.py
@@ -86,6 +92,27 @@ pytest --cov=sg_send_cli --cov-report=term-missing
 pip install -e ".[dev]"
 ```
 
+## Integration Testing (Python 3.12 venv)
+
+Integration tests run against a real in-memory SG/Send server provided by `sgraph-ai-app-send`, which requires Python >= 3.12. The default environment uses Python 3.11, so a separate venv is needed.
+
+```bash
+# Setup (one-time)
+python3.12 -m venv /tmp/sg-send-venv-312
+/tmp/sg-send-venv-312/bin/pip install -e ".[dev]"
+/tmp/sg-send-venv-312/bin/pip install sgraph-ai-app-send
+
+# Run integration tests
+/tmp/sg-send-venv-312/bin/python -m pytest tests/integration/ -v
+```
+
+See `team/explorer/dev/python-3.12-venv-integration-testing.md` for full details.
+
 ## Team
 
 This project uses the Explorer team pattern. See `team/explorer/` for role definitions.
+
+## Team Directory Conventions
+
+- **`team/humans/dinis_cruz/briefs/`** — READ-ONLY. These are briefs written by the human for Claude. **Never create, edit, or move files in this directory.**
+- **`team/humans/dinis_cruz/claude-code-web/`** — Files created by Claude Code web sessions (briefs, specs, SKILLs, etc.). Organised by date (`03/14/`, etc.).

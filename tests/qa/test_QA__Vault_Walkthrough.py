@@ -15,32 +15,32 @@ Prerequisites:
 Notes:
     - Tests are numbered (test__1__, test__2__, ...) and should be run in order.
     - Each test prints what it's doing and what to inspect.
-    - All tests use /tmp/sg_vault_qa/ as the working directory.
+    - All tests use a tempdir as the working directory.
     - The entire qa/ folder is excluded from normal pytest runs via conftest.py.
 """
 import json
 import os
 import shutil
 import socket
+import tempfile
 
 import pytest
-from osbot_utils.utils.Files import path_combine
 
 from sg_send_cli.api.Vault__API             import Vault__API
 from sg_send_cli.crypto.Vault__Crypto       import Vault__Crypto
 from sg_send_cli.sync.Vault__Sync           import Vault__Sync
 from sg_send_cli.objects.Vault__Inspector   import Vault__Inspector
+from tests.qa.helpers                       import print_section, print_tree
 
 SERVER_PORT = 18321
 SERVER_URL  = f'http://127.0.0.1:{SERVER_PORT}'
-#QA_DIR      = '/tmp/sg_vault_qa'
-QA_DIR      = path_combine(__file__,'../_vaults')
+QA_DIR      = tempfile.mkdtemp(prefix='sg_qa_walkthrough_')
+SEED_DIR    = os.path.join(QA_DIR, 'seed-vault')
 CLONE_DIR   = os.path.join(QA_DIR, 'my-vault')
 CLONE_DIR_2 = os.path.join(QA_DIR, 'my-vault-2')
 PASSPHRASE  = 'qa-test-passphrase'
 VAULT_ID    = 'qa-test-vault-01'
 VAULT_KEY   = f'{PASSPHRASE}:{VAULT_ID}'
-
 
 def _server_is_running():
     try:
@@ -48,24 +48,6 @@ def _server_is_running():
             return True
     except OSError:
         return False
-
-
-def _print_section(title):
-    print(f'\n{"=" * 60}')
-    print(f'  {title}')
-    print(f'{"=" * 60}')
-
-
-def _print_tree(directory, indent=0):
-    for entry in sorted(os.listdir(directory)):
-        full = os.path.join(directory, entry)
-        prefix = '  ' * indent
-        if os.path.isdir(full):
-            print(f'{prefix}{entry}/')
-            _print_tree(full, indent + 1)
-        else:
-            size = os.path.getsize(full)
-            print(f'{prefix}{entry}  ({size} bytes)')
 
 
 SKIP_REASON = (
@@ -86,52 +68,39 @@ class Test_QA__Vault_Walkthrough:
         self.keys      = self.crypto.derive_keys_from_vault_key(VAULT_KEY)
 
     # -------------------------------------------------------------------------
-    # Step 1: Seed the server (simulates what the browser does)
+    # Step 1: Seed the server (init + add files + commit + push)
     # -------------------------------------------------------------------------
 
     def test__1__seed_vault(self):
-        _print_section('Step 1: Seed vault on server')
+        print_section('Step 1: Seed vault on server')
 
         os.makedirs(QA_DIR, exist_ok=True)
-        read_key  = self.keys['read_key_bytes']
-        write_key = self.keys['write_key']
+
+        result = self.sync.init(SEED_DIR, vault_key=VAULT_KEY)
+        print(f'  Initialized vault in {SEED_DIR}/')
+        print(f'  Vault ID:  {result["vault_id"]}')
+        print(f'  Vault key: {result["vault_key"]}')
 
         files = {
-            'README.md'        : b'# My Vault\nThis is a test vault.\n',
-            'notes/todo.txt'   : b'- Buy milk\n- Write code\n- Ship it\n',
-            'notes/ideas.txt'  : b'Idea 1: encrypted vaults as git repos\n',
+            'README.md'        : '# My Vault\nThis is a test vault.\n',
+            'notes/todo.txt'   : '- Buy milk\n- Write code\n- Ship it\n',
+            'notes/ideas.txt'  : 'Idea 1: encrypted vaults as git repos\n',
         }
 
-        children = {}
-        file_ids = {}
         for path, content in files.items():
-            file_id   = os.urandom(6).hex()
-            encrypted = self.crypto.encrypt(read_key, content)
-            result    = self.api.write(VAULT_ID, file_id, write_key, encrypted)
-            file_ids[path] = file_id
+            full_path = os.path.join(SEED_DIR, path)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, 'w') as f:
+                f.write(content)
+            print(f'  Created: {path} ({len(content)} bytes)')
 
-            parts   = path.split('/')
-            current = children
-            for part in parts[:-1]:
-                if part not in current:
-                    current[part] = {'type': 'folder', 'children': {}}
-                current = current[part]['children']
-            current[parts[-1]] = {'type': 'file', 'file_id': file_id, 'size': len(content)}
+        commit_result = self.sync.commit(SEED_DIR, message='seed vault with initial files')
+        print(f'\n  Commit: {commit_result["commit_id"]}')
 
-            print(f'  Uploaded: {path} -> file_id={file_id} ({len(content)} bytes)')
+        push_result = self.sync.push(SEED_DIR)
+        print(f'  Push:   {push_result["status"]}')
+        print(f'  Objects uploaded: {push_result.get("objects_uploaded", 0)}')
 
-        tree = {'version': 1, 'tree': {'/': {'type': 'folder', 'children': children}}}
-        settings = {'vault_id': VAULT_ID, 'vault_name': 'QA Test Vault'}
-
-        self.api.write(VAULT_ID, self.keys['tree_file_id'], write_key,
-                       self.crypto.encrypt(read_key, json.dumps(tree).encode()))
-        self.api.write(VAULT_ID, self.keys['settings_file_id'], write_key,
-                       self.crypto.encrypt(read_key, json.dumps(settings).encode()))
-
-        print(f'\n  Vault ID:          {VAULT_ID}')
-        print(f'  Tree file ID:      {self.keys["tree_file_id"]}')
-        print(f'  Settings file ID:  {self.keys["settings_file_id"]}')
-        print(f'  Files uploaded:    {len(files)}')
         print(f'\n  Server is ready for clone.')
 
     # -------------------------------------------------------------------------
@@ -139,7 +108,7 @@ class Test_QA__Vault_Walkthrough:
     # -------------------------------------------------------------------------
 
     def test__2__clone_vault(self):
-        _print_section('Step 2: Clone vault from server')
+        print_section('Step 2: Clone vault from server')
 
         if os.path.exists(CLONE_DIR):
             shutil.rmtree(CLONE_DIR)
@@ -148,19 +117,14 @@ class Test_QA__Vault_Walkthrough:
 
         print(f'  Cloned to: {result}')
         print(f'\n  File tree:')
-        _print_tree(CLONE_DIR)
-
-        print(f'\n  Inspect with:')
-        print(f'    cat {CLONE_DIR}/README.md')
-        print(f'    cat {CLONE_DIR}/.sg_vault/refs/head')
-        print(f'    ls  {CLONE_DIR}/.sg_vault/objects/')
+        print_tree(CLONE_DIR)
 
     # -------------------------------------------------------------------------
     # Step 3: Inspect the object store
     # -------------------------------------------------------------------------
 
     def test__3__inspect_object_store(self):
-        _print_section('Step 3: Inspect the local object store')
+        print_section('Step 3: Inspect the local object store')
 
         summary = self.inspector.format_vault_summary(CLONE_DIR)
         print(f'\n{summary}')
@@ -180,30 +144,25 @@ class Test_QA__Vault_Walkthrough:
     # -------------------------------------------------------------------------
 
     def test__3b__cat_objects(self):
-        _print_section('Step 3b: Cat object contents')
+        print_section('Step 3b: Cat object contents')
 
         read_key = self.keys['read_key_bytes']
 
-        # Get HEAD commit id
         chain = self.inspector.inspect_commit_chain(CLONE_DIR, read_key=read_key)
         assert len(chain) > 0
         head_commit_id = chain[0]['commit_id']
         tree_id        = chain[0]['tree_id']
 
-        # Cat the commit object
         print(self.inspector.format_cat_object(CLONE_DIR, head_commit_id, read_key))
 
-        # Cat the tree object
         print()
         print(self.inspector.format_cat_object(CLONE_DIR, tree_id, read_key))
 
-        # Cat a blob (first file in tree)
         tree_info = self.inspector.inspect_tree(CLONE_DIR, read_key=read_key)
         first_blob = tree_info['entries'][0]['blob_id']
         print()
         print(self.inspector.format_cat_object(CLONE_DIR, first_blob, read_key))
 
-        # Cat a non-existent object
         print()
         print(self.inspector.format_cat_object(CLONE_DIR, 'does_not_exist', read_key))
 
@@ -212,18 +171,18 @@ class Test_QA__Vault_Walkthrough:
     # -------------------------------------------------------------------------
 
     def test__4__status_after_clone(self):
-        _print_section('Step 4: Status after clone (should be clean)')
+        print_section('Step 4: Status after clone (should be clean)')
 
         status = self.sync.status(CLONE_DIR)
         print(f'  Status: {json.dumps(status, indent=2)}')
         assert status['clean'], 'Expected clean status after clone'
 
     # -------------------------------------------------------------------------
-    # Step 5: Add a new file locally
+    # Step 5: Add a new file locally and commit
     # -------------------------------------------------------------------------
 
     def test__5__add_local_file(self):
-        _print_section('Step 5: Add a new file locally')
+        print_section('Step 5: Add a new file locally')
 
         new_file = os.path.join(CLONE_DIR, 'changelog.txt')
         with open(new_file, 'w') as f:
@@ -235,12 +194,15 @@ class Test_QA__Vault_Walkthrough:
         print(f'\n  Status: {json.dumps(status, indent=2)}')
         assert 'changelog.txt' in status['added']
 
+        result = self.sync.commit(CLONE_DIR, message='add changelog')
+        print(f'\n  Commit: {result["commit_id"]}')
+
     # -------------------------------------------------------------------------
     # Step 6: Push changes to server
     # -------------------------------------------------------------------------
 
     def test__6__push_changes(self):
-        _print_section('Step 6: Push changes to server')
+        print_section('Step 6: Push changes to server')
 
         result = self.sync.push(CLONE_DIR)
         print(f'  Push result: {json.dumps(result, indent=2)}')
@@ -251,7 +213,7 @@ class Test_QA__Vault_Walkthrough:
 
         read_key = self.keys['read_key_bytes']
         chain = self.inspector.inspect_commit_chain(CLONE_DIR, read_key=read_key)
-        print(f'\n  Commit chain (should have 2 commits):')
+        print(f'\n  Commit chain (should have 3 commits):')
         print(self.inspector.format_commit_log(chain))
 
     # -------------------------------------------------------------------------
@@ -259,7 +221,7 @@ class Test_QA__Vault_Walkthrough:
     # -------------------------------------------------------------------------
 
     def test__7__clone_second_copy(self):
-        _print_section('Step 7: Clone into second directory')
+        print_section('Step 7: Clone into second directory')
 
         if os.path.exists(CLONE_DIR_2):
             shutil.rmtree(CLONE_DIR_2)
@@ -268,7 +230,7 @@ class Test_QA__Vault_Walkthrough:
 
         print(f'  Cloned to: {CLONE_DIR_2}')
         print(f'\n  File tree:')
-        _print_tree(CLONE_DIR_2)
+        print_tree(CLONE_DIR_2)
 
         changelog = os.path.join(CLONE_DIR_2, 'changelog.txt')
         assert os.path.isfile(changelog), 'changelog.txt missing from second clone'
@@ -278,11 +240,11 @@ class Test_QA__Vault_Walkthrough:
         print(f'    {content}')
 
     # -------------------------------------------------------------------------
-    # Step 8: Modify a file and push from second copy
+    # Step 8: Modify a file, commit, and push from second copy
     # -------------------------------------------------------------------------
 
     def test__8__modify_and_push_from_second_copy(self):
-        _print_section('Step 8: Modify file in second copy and push')
+        print_section('Step 8: Modify file in second copy and push')
 
         readme = os.path.join(CLONE_DIR_2, 'README.md')
         with open(readme, 'w') as f:
@@ -292,6 +254,9 @@ class Test_QA__Vault_Walkthrough:
         print(f'  Status: {json.dumps(status, indent=2)}')
         assert 'README.md' in status['modified']
 
+        commit_result = self.sync.commit(CLONE_DIR_2, message='update README from second copy')
+        print(f'\n  Commit: {commit_result["commit_id"]}')
+
         result = self.sync.push(CLONE_DIR_2)
         print(f'\n  Push result: {json.dumps(result, indent=2)}')
 
@@ -300,7 +265,7 @@ class Test_QA__Vault_Walkthrough:
     # -------------------------------------------------------------------------
 
     def test__9__pull_into_first_copy(self):
-        _print_section('Step 9: Pull changes into first copy')
+        print_section('Step 9: Pull changes into first copy')
 
         result = self.sync.pull(CLONE_DIR)
         print(f'  Pull result: {json.dumps(result, indent=2)}')
@@ -314,7 +279,7 @@ class Test_QA__Vault_Walkthrough:
 
         read_key = self.keys['read_key_bytes']
         chain = self.inspector.inspect_commit_chain(CLONE_DIR, read_key=read_key)
-        print(f'\n  Commit chain (should have 3 commits):')
+        print(f'\n  Commit chain (should have 4+ commits):')
         print(self.inspector.format_commit_log(chain))
 
     # -------------------------------------------------------------------------
@@ -322,7 +287,7 @@ class Test_QA__Vault_Walkthrough:
     # -------------------------------------------------------------------------
 
     def test__10__delete_file_and_push(self):
-        _print_section('Step 10: Delete a file and push')
+        print_section('Step 10: Delete a file and push')
 
         os.remove(os.path.join(CLONE_DIR, 'notes', 'ideas.txt'))
         print(f'  Deleted: notes/ideas.txt')
@@ -330,6 +295,9 @@ class Test_QA__Vault_Walkthrough:
         status = self.sync.status(CLONE_DIR)
         print(f'\n  Status: {json.dumps(status, indent=2)}')
         assert 'notes/ideas.txt' in status['deleted']
+
+        commit_result = self.sync.commit(CLONE_DIR, message='delete ideas.txt')
+        print(f'\n  Commit: {commit_result["commit_id"]}')
 
         result = self.sync.push(CLONE_DIR)
         print(f'\n  Push result: {json.dumps(result, indent=2)}')
@@ -343,10 +311,10 @@ class Test_QA__Vault_Walkthrough:
     # -------------------------------------------------------------------------
 
     def test__11__final_inspection(self):
-        _print_section('Step 11: Final vault state')
+        print_section('Step 11: Final vault state')
 
         print(f'\n  First copy ({CLONE_DIR}):')
-        _print_tree(CLONE_DIR)
+        print_tree(CLONE_DIR)
 
         summary = self.inspector.format_vault_summary(CLONE_DIR)
         print(f'\n{summary}')
@@ -361,16 +329,3 @@ class Test_QA__Vault_Walkthrough:
         print(f'    Total objects: {stats["total_objects"]}')
         print(f'    Total bytes:   {stats["total_bytes"]}')
         print(f'    Buckets:       {stats["buckets"]}')
-
-    # -------------------------------------------------------------------------
-    # Cleanup (optional - run manually)
-    # -------------------------------------------------------------------------
-
-    # def test__12__cleanup(self):
-    #     _print_section('Step 12: Cleanup')
-    #
-    #     if os.path.exists(QA_DIR):
-    #         shutil.rmtree(QA_DIR)
-    #         print(f'  Removed: {QA_DIR}')
-    #     else:
-    #         print(f'  Nothing to clean up')
