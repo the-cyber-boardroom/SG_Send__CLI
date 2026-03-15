@@ -172,6 +172,12 @@ class Test_QA__Vault_Init_Walkthrough:
         print(f'\n  File tree:')
         print_tree(CLONE_DIR)
 
+        # Verify clone structure
+        idx_dir   = os.path.join(CLONE_DIR, '.sg_vault', 'bare', 'indexes')
+        idx_files = [f for f in os.listdir(idx_dir) if f.startswith('idx-')]
+        assert len(idx_files) > 0, f'No idx-* files after clone: {os.listdir(idx_dir)}'
+        print(f'\n  Branch index: {idx_files[0]}')
+
         readme = os.path.join(CLONE_DIR, 'README.md')
         assert os.path.isfile(readme)
         with open(readme) as f:
@@ -193,10 +199,14 @@ class Test_QA__Vault_Init_Walkthrough:
         self.sync.commit(CLONE_DIR, message='add file from clone')
         result = self.sync.push(CLONE_DIR)
         print(f'  Push from clone: {json.dumps(result, indent=2)}')
+        assert result.get('status') == 'pushed', \
+            f'Expected push status "pushed", got: {result.get("status")}'
 
         pull_result = self.sync.pull(VAULT_DIR)
         print(f'\n  Pull into original: {json.dumps(pull_result, indent=2)}')
-        assert 'from-clone.txt' in pull_result['added']
+        assert pull_result.get('status') != 'up_to_date', \
+            f'Pull should detect changes from clone push, but got "up_to_date"'
+        assert 'from-clone.txt' in pull_result.get('added', [])
 
         with open(os.path.join(VAULT_DIR, 'from-clone.txt')) as f:
             content = f.read()

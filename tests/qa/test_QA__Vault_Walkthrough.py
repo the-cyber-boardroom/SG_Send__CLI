@@ -119,6 +119,25 @@ class Test_QA__Vault_Walkthrough:
         print(f'\n  File tree:')
         print_tree(CLONE_DIR)
 
+        # Verify clone created correct local structure
+        sg_dir   = os.path.join(CLONE_DIR, '.sg_vault')
+        bare_dir = os.path.join(sg_dir, 'bare')
+        assert os.path.isdir(bare_dir),                       f'Missing bare/ directory'
+        assert os.path.isdir(os.path.join(bare_dir, 'data')), f'Missing bare/data/'
+        assert os.path.isdir(os.path.join(bare_dir, 'refs')), f'Missing bare/refs/'
+
+        idx_dir  = os.path.join(bare_dir, 'indexes')
+        assert os.path.isdir(idx_dir), f'Missing bare/indexes/'
+        idx_files = [f for f in os.listdir(idx_dir) if f.startswith('idx-')]
+        assert len(idx_files) > 0, f'No idx-* files in {idx_dir}: {os.listdir(idx_dir)}'
+        print(f'\n  Branch index: {idx_files[0]}')
+
+        config_path = os.path.join(sg_dir, 'local', 'config.json')
+        assert os.path.isfile(config_path), f'Missing local/config.json'
+        with open(config_path) as f:
+            config = json.load(f)
+        print(f'  Clone branch: {config.get("my_branch_id", "??")}')
+
     # -------------------------------------------------------------------------
     # Step 3: Inspect the object store
     # -------------------------------------------------------------------------
@@ -231,6 +250,11 @@ class Test_QA__Vault_Walkthrough:
         print(f'  Cloned to: {CLONE_DIR_2}')
         print(f'\n  File tree:')
         print_tree(CLONE_DIR_2)
+
+        # Verify clone structure
+        idx_dir   = os.path.join(CLONE_DIR_2, '.sg_vault', 'bare', 'indexes')
+        idx_files = [f for f in os.listdir(idx_dir) if f.startswith('idx-')]
+        assert len(idx_files) > 0, f'No idx-* files after second clone: {os.listdir(idx_dir)}'
 
         changelog = os.path.join(CLONE_DIR_2, 'changelog.txt')
         assert os.path.isfile(changelog), 'changelog.txt missing from second clone'
