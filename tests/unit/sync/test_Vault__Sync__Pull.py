@@ -45,14 +45,14 @@ class Test_Vault__Sync__Pull:
         sg_dir     = os.path.join(directory, '.sg_vault')
 
         storage     = Vault__Storage()
-        obj_store   = Vault__Object_Store(vault_path=sg_dir, crypto=self.crypto, use_v2=True)
-        ref_manager = Vault__Ref_Manager(vault_path=sg_dir, crypto=self.crypto, use_v2=True)
+        obj_store   = Vault__Object_Store(vault_path=sg_dir, crypto=self.crypto)
+        ref_manager = Vault__Ref_Manager(vault_path=sg_dir, crypto=self.crypto)
         key_manager = Vault__Key_Manager(vault_path=sg_dir, crypto=self.crypto, pki=self.pki)
 
         branch_manager = Vault__Branch_Manager(vault_path=sg_dir, crypto=self.crypto,
                                                key_manager=key_manager, ref_manager=ref_manager,
                                                storage=storage)
-        index_id     = branch_manager.find_branch_index_id(directory)
+        index_id     = keys['branch_index_file_id']
         branch_index = branch_manager.load_branch_index(directory, index_id, read_key)
         named_meta   = branch_manager.get_branch_by_name(branch_index, 'current')
         named_ref_id = str(named_meta.head_ref_id)

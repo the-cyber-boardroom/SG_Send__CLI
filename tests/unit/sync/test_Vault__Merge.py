@@ -17,6 +17,7 @@ class Test_Vault__Merge:
     def _make_tree(self, entries_dict: dict) -> Schema__Object_Tree:
         tree = Schema__Object_Tree(schema='tree_v1')
         for path, blob_id in entries_dict.items():
+            blob_id = f'obj-cas-imm-{blob_id}' if not blob_id.startswith('obj-cas-imm-') else blob_id
             tree.entries.append(Schema__Object_Tree_Entry(path=path, blob_id=blob_id, size=10))
         return tree
 
@@ -49,7 +50,7 @@ class Test_Vault__Merge:
         assert 'a.txt' in result['modified']
         assert result['conflicts'] == []
         entry = result['merged_tree'].entries[0]
-        assert str(entry.blob_id) == '112233445566'
+        assert str(entry.blob_id) == 'obj-cas-imm-112233445566'
 
     def test_ours_modifies_theirs_unchanged(self):
         base   = self._make_tree({'a.txt': 'aabbccddeeff'})
@@ -58,7 +59,7 @@ class Test_Vault__Merge:
         result = self.merger.three_way_merge(base, ours, theirs)
         assert result['conflicts'] == []
         entry = result['merged_tree'].entries[0]
-        assert str(entry.blob_id) == '112233445566'
+        assert str(entry.blob_id) == 'obj-cas-imm-112233445566'
 
     def test_both_modify_same_content_no_conflict(self):
         base   = self._make_tree({'a.txt': 'aabbccddeeff'})
@@ -165,7 +166,7 @@ class Test_Vault__Merge__Conflict_Files:
         sg_dir = os.path.join(self.tmp_dir, '.sg_vault', 'bare', 'data')
         os.makedirs(sg_dir, exist_ok=True)
         self.obj_store = Vault__Object_Store(vault_path=os.path.join(self.tmp_dir, '.sg_vault'),
-                                              crypto=self.crypto, use_v2=True)
+                                              crypto=self.crypto)
 
     def teardown_method(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
@@ -177,6 +178,7 @@ class Test_Vault__Merge__Conflict_Files:
     def _make_tree(self, entries_dict: dict) -> Schema__Object_Tree:
         tree = Schema__Object_Tree(schema='tree_v1')
         for path, blob_id in entries_dict.items():
+            blob_id = f'obj-cas-imm-{blob_id}' if not blob_id.startswith('obj-cas-imm-') else blob_id
             tree.entries.append(Schema__Object_Tree_Entry(path=path, blob_id=blob_id, size=10))
         return tree
 
