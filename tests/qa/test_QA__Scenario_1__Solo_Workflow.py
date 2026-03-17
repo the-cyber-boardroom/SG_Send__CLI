@@ -167,15 +167,15 @@ class Test_QA__Scenario_1:
         for k, v in sorted(counts.items()):
             print(f'    {k}: {v}')
 
-        # After commit: +4 data objects (2 blobs + 1 tree + 1 commit)
-        # Implementation uses flat tree (all entries in one tree object),
-        # unlike arch doc which predicts separate sub-trees for folders.
-        #   data/:    6 (init tree + init commit + 2 blobs + 1 tree + 1 commit)
+        # After commit: +5 data objects (2 blobs + 1 configs sub-tree + 1 root tree + 1 commit)
+        # Implementation uses sub-tree model: each directory gets its own tree object.
+        # configs/EC2.json lives in a separate configs/ sub-tree referenced from root.
+        #   data/:    7 (init tree + init commit + 2 blobs + configs sub-tree + root tree + commit)
         #   refs/:    2 (clone ref updated, named ref unchanged)
         #   keys/:    3 (unchanged)
         #   indexes/: 1 (unchanged)
-        assert counts['data']  == 6, f'Expected 6 data objects, got {counts["data"]}'
-        assert counts['total'] == 12, f'Expected 12 total bare files, got {counts["total"]}'
+        assert counts['data']  == 7, f'Expected 7 data objects, got {counts["data"]}'
+        assert counts['total'] == 13, f'Expected 13 total bare files, got {counts["total"]}'
 
         # Working dir: 2 files
         assert count_working_files(vault_dir) == 2
@@ -231,7 +231,7 @@ class Test_QA__Scenario_1:
         print(f'\n  Encrypted files in bare/ after push:')
         for k, v in sorted(counts.items()):
             print(f'    {k}: {v}')
-        assert counts['total'] == 12
+        assert counts['total'] == 13
 
         # Status still clean
         status = shared['sync'].status(shared['vault_dir'])
@@ -256,12 +256,13 @@ class Test_QA__Scenario_1:
         result = shared['sync'].commit(vault_dir, message='add notes.txt')
         print(f'\n  Commit: {json.dumps(result, indent=2)}')
 
-        # After second commit: +3 data (1 blob + 1 tree + 1 commit) = 9 data total
+        # After second commit: +4 data (1 blob + 1 configs sub-tree re-encrypted + 1 root tree + 1 commit) = 11 data total
+        # The configs/ sub-tree is re-encrypted on every commit (new nonce → new object ID) even if unchanged.
         counts = count_bare_files(vault_dir)
         print(f'\n  bare/ after second commit:')
         for k, v in sorted(counts.items()):
             print(f'    {k}: {v}')
-        assert counts['data'] == 9, f'Expected 9 data objects, got {counts["data"]}'
+        assert counts['data'] == 11, f'Expected 11 data objects, got {counts["data"]}'
 
         status = shared['sync'].status(vault_dir)
         assert status['clean']

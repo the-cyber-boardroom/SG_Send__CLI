@@ -34,10 +34,11 @@ class Vault__Remote(Type_Safe):
             {files: [{path, size, blob_id}], file_count: int, total_size: int}
         """
         tree, keys = self._fetch_tree(vault_key)
-        files = [dict(path    = self._entry_path(e),
+        flat  = self._flatten_tree(keys['vault_id'], tree, keys['read_key_bytes'])
+        files = [dict(path    = path,
                       size    = int(e.size) if e.size else 0,
                       blob_id = str(e.blob_id) if e.blob_id else None)
-                 for e in tree.entries]
+                 for path, e in flat]
         return dict(files      = files,
                     file_count = len(files),
                     total_size = sum(f['size'] for f in files))
@@ -52,14 +53,15 @@ class Vault__Remote(Type_Safe):
         vault_id   = keys['vault_id']
         read_key   = keys['read_key_bytes']
 
-        for entry in tree.entries:
-            if self._entry_path(entry) == file_path:
+        flat = self._flatten_tree(vault_id, tree, read_key)
+        for path, entry in flat:
+            if path == file_path:
                 blob_id = str(entry.blob_id) if entry.blob_id else None
                 if not blob_id:
                     raise RuntimeError(f"File '{file_path}' has no blob_id in vault")
                 return self._decrypt_blob(vault_id, blob_id, read_key)
 
-        available = sorted(self._entry_path(e) for e in tree.entries)
+        available = sorted(p for p, _ in flat)
         raise RuntimeError(
             f"File '{file_path}' not found in vault.\n"
             f"Available files: {', '.join(available) if available else '(empty vault)'}")
@@ -96,9 +98,10 @@ class Vault__Remote(Type_Safe):
             {vault_id, file_count, total_size}
         """
         tree, keys = self._fetch_tree(vault_key)
-        total_size = sum(int(e.size) if e.size else 0 for e in tree.entries)
+        flat       = self._flatten_tree(keys['vault_id'], tree, keys['read_key_bytes'])
+        total_size = sum(int(e.size) if e.size else 0 for _, e in flat)
         return dict(vault_id   = keys['vault_id'],
-                    file_count = len(tree.entries),
+                    file_count = len(flat),
                     total_size = total_size)
 
     # ------------------------------------------------------------------ #
@@ -159,6 +162,23 @@ class Vault__Remote(Type_Safe):
             self._decrypt_entry_fields(entry, read_key)
 
         return tree, keys
+
+    def _flatten_tree(self, vault_id: str, tree: Schema__Object_Tree, read_key: bytes, prefix: str = '') -> list:
+        """Recursively walk a tree, returning a flat list of (full_path, entry) for all file entries."""
+        result = []
+        for entry in tree.entries:
+            name      = self._entry_path(entry)
+            full_path = f'{prefix}/{name}' if prefix else name
+            if entry.blob_id:
+                result.append((full_path, entry))
+            elif entry.tree_id:
+                sub_data  = self.api.read(vault_id, f'bare/data/{str(entry.tree_id)}')
+                sub_plain = json.loads(self.crypto.decrypt(read_key, sub_data))
+                sub_tree  = Schema__Object_Tree.from_json(sub_plain)
+                for sub_entry in sub_tree.entries:
+                    self._decrypt_entry_fields(sub_entry, read_key)
+                result.extend(self._flatten_tree(vault_id, sub_tree, read_key, prefix=full_path))
+        return result
 
     def _decrypt_entry_fields(self, entry, read_key: bytes) -> None:
         """Decrypt encrypted tree entry fields (path, size, content_hash) in-place."""

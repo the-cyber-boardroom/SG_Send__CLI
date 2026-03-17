@@ -28,12 +28,12 @@ class Test_Vault__Integration__Key_Derivation:
         self.keys   = self.crypto.derive_keys_from_vault_key(TEST_VAULT_KEY)
 
     def test_derive_keys__returns_all_fields(self):
-        assert 'read_key'         in self.keys
-        assert 'write_key'        in self.keys
-        assert 'tree_file_id'     in self.keys
-        assert 'settings_file_id' in self.keys
-        assert 'vault_id'         in self.keys
-        assert 'passphrase'       in self.keys
+        assert 'read_key'              in self.keys
+        assert 'write_key'             in self.keys
+        assert 'ref_file_id'           in self.keys
+        assert 'branch_index_file_id'  in self.keys
+        assert 'vault_id'              in self.keys
+        assert 'passphrase'            in self.keys
 
     def test_derive_keys__read_key_is_64_hex(self):
         assert len(self.keys['read_key']) == 64
@@ -42,15 +42,15 @@ class Test_Vault__Integration__Key_Derivation:
         assert len(self.keys['write_key']) == 64
 
     def test_derive_keys__file_ids_are_12_hex(self):
-        assert len(self.keys['tree_file_id'])     == 12
-        assert len(self.keys['settings_file_id']) == 12
+        assert len(self.keys['ref_file_id'])          > 12   # ref-pid-muw-{12hex}
+        assert len(self.keys['branch_index_file_id']) > 12   # idx-pid-muw-{12hex}
 
     def test_derive_keys__deterministic(self):
         keys2 = self.crypto.derive_keys_from_vault_key(TEST_VAULT_KEY)
-        assert self.keys['read_key']         == keys2['read_key']
-        assert self.keys['write_key']        == keys2['write_key']
-        assert self.keys['tree_file_id']     == keys2['tree_file_id']
-        assert self.keys['settings_file_id'] == keys2['settings_file_id']
+        assert self.keys['read_key']              == keys2['read_key']
+        assert self.keys['write_key']             == keys2['write_key']
+        assert self.keys['ref_file_id']           == keys2['ref_file_id']
+        assert self.keys['branch_index_file_id']  == keys2['branch_index_file_id']
 
 
 class Test_Vault__Integration__Read_API:
