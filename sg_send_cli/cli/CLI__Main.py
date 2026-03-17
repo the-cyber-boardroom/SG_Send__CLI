@@ -146,6 +146,27 @@ class CLI__Main(Type_Safe):
         log_parser.add_argument('directory', nargs='?', default='.', help='Vault directory (default: .)')
         log_parser.set_defaults(func=self.vault.cmd_log)
 
+        # --- Cloneless remote commands ---
+
+        ls_parser = subparsers.add_parser('ls', help='List files in a vault (no clone needed)')
+        ls_parser.add_argument('vault_key', help='Vault key ({passphrase}:{vault_id})')
+        ls_parser.set_defaults(func=self.vault.cmd_ls)
+
+        cat_parser = subparsers.add_parser('cat', help='Read a file from a vault to stdout (no clone needed)')
+        cat_parser.add_argument('vault_key',  help='Vault key ({passphrase}:{vault_id})')
+        cat_parser.add_argument('file_path',  help='Path within the vault')
+        cat_parser.set_defaults(func=self.vault.cmd_cat)
+
+        get_parser = subparsers.add_parser('get', help='Download a single file from a vault (no clone needed)')
+        get_parser.add_argument('vault_key',  help='Vault key ({passphrase}:{vault_id})')
+        get_parser.add_argument('file_path',  help='Path within the vault')
+        get_parser.add_argument('dest', nargs='?', default=None, help='Local destination (default: filename)')
+        get_parser.set_defaults(func=self.vault.cmd_get)
+
+        info_parser = subparsers.add_parser('info', help='Show vault info without cloning')
+        info_parser.add_argument('vault_key', help='Vault key ({passphrase}:{vault_id})')
+        info_parser.set_defaults(func=self.vault.cmd_info)
+
         # --- Bare vault commands ---
 
         checkout_parser = subparsers.add_parser('checkout', help='Extract working copy from bare vault')

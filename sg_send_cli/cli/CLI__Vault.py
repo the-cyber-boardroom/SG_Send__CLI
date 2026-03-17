@@ -6,6 +6,7 @@ from sg_send_cli.crypto.Vault__Crypto            import Vault__Crypto
 from sg_send_cli.api.Vault__API                  import Vault__API
 from sg_send_cli.sync.Vault__Sync                import Vault__Sync
 from sg_send_cli.sync.Vault__Bare                import Vault__Bare
+from sg_send_cli.sync.Vault__Remote              import Vault__Remote
 from sg_send_cli.objects.Vault__Inspector         import Vault__Inspector
 from sg_send_cli.cli.CLI__Token_Store            import CLI__Token_Store
 from sg_send_cli.cli.CLI__Credential_Store       import CLI__Credential_Store
@@ -361,3 +362,56 @@ class CLI__Vault(Type_Safe):
 
     def cmd_log(self, args):
         self.cmd_inspect_log(args)
+
+    # --- Cloneless remote commands ---
+
+    def create_remote(self, base_url: str = None, access_token: str = None) -> Vault__Remote:
+        api = Vault__API(base_url=base_url or '', access_token=access_token or '')
+        api.setup()
+        return Vault__Remote(crypto=Vault__Crypto(), api=api)
+
+    def _format_size(self, size: int) -> str:
+        if size < 1024:
+            return f'{size} B'
+        elif size < 1024 * 1024:
+            return f'{size / 1024:.1f} KB'
+        else:
+            return f'{size / (1024 * 1024):.1f} MB'
+
+    def cmd_ls(self, args):
+        base_url = getattr(args, 'base_url', None)
+        token    = self.token_store.resolve_token(getattr(args, 'token', None), None)
+        remote   = self.create_remote(base_url, token)
+        result   = remote.list_files(args.vault_key)
+        print(f'Vault: {args.vault_key.split(":")[-1]}')
+        print(f'{result["file_count"]} files, {self._format_size(result["total_size"])}')
+        if result['files']:
+            print()
+            for f in sorted(result['files'], key=lambda x: x['path']):
+                print(f'  {self._format_size(f["size"]):>10}  {f["path"]}')
+
+    def cmd_cat(self, args):
+        base_url = getattr(args, 'base_url', None)
+        token    = self.token_store.resolve_token(getattr(args, 'token', None), None)
+        remote   = self.create_remote(base_url, token)
+        data     = remote.read_file(args.vault_key, args.file_path)
+        sys.stdout.buffer.write(data)
+
+    def cmd_get(self, args):
+        import os
+        base_url  = getattr(args, 'base_url', None)
+        token     = self.token_store.resolve_token(getattr(args, 'token', None), None)
+        remote    = self.create_remote(base_url, token)
+        dest      = args.dest or os.path.basename(args.file_path)
+        saved_to  = remote.save_file(args.vault_key, args.file_path, dest)
+        size      = os.path.getsize(saved_to)
+        print(f'Saved {args.file_path} -> {saved_to} ({self._format_size(size)})')
+
+    def cmd_info(self, args):
+        base_url = getattr(args, 'base_url', None)
+        token    = self.token_store.resolve_token(getattr(args, 'token', None), None)
+        remote   = self.create_remote(base_url, token)
+        info     = remote.get_info(args.vault_key)
+        print(f'Vault ID:   {info["vault_id"]}')
+        print(f'Files:      {info["file_count"]}')
+        print(f'Total size: {self._format_size(info["total_size"])}')
